@@ -1,0 +1,4 @@
+ALTER TYPE "FoodImportStatus" ADD VALUE 'PROCESSING';
+
+ALTER TABLE "FoodImport"
+ADD COLUMN "stagingKey" VARCHAR(64);

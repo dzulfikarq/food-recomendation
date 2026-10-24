@@ -1,0 +1,23 @@
+# Keputusan FoodRec
+
+| ID | Keputusan | Alasan/status |
+| --- | --- | --- |
+| D-01 | Next.js App Router + TypeScript; Server Components default, client auth forms only. | Satu aplikasi full-stack sesuai scope. **Implemented**. |
+| D-02 | Tailwind CSS 4 tokens, Plus Jakarta Sans (`next/font/google`), Lucide React. | Design system diminta, tanpa component library tambahan. **Implemented**; visual/accessibility audit **Pending Validation**. |
+| D-03 | PostgreSQL + Prisma ORM 7, migration versioned, Docker Compose local dengan named volume. | Numeric IDs dan relational integrity sesuai dataset penelitian; bukan SQLite. **Implemented**; migration/constraints diuji pada PG17 sementara; deployment DB **Pending Validation**. |
+| D-04 | Better Auth + Prisma adapter, database sessions, built-in scrypt password hash. | Menghindari custom session protocol; auth schema menyimpan credential hash pada `Account.password`. **Implemented**. |
+| D-05 | Public registration role di-lock sebagai USER via input disabled dan DB hook; admin dibuat eksplisit oleh seed. | Menghindari privilege escalation dan auto-promote. **Implemented**; auth/seed integration lulus pada PG17 sementara. |
+| D-06 | Integer serial IDs untuk User dan entitas domain; Better Auth `generateId: "serial"`. | ID pengguna dipakai sebagai kunci dataset CF. **Implemented**. |
+| D-07 | Research FKs restrictive; `foodCode` dan snapshot export immutable; import/batch history tidak dapat dihapus. | Mencegah kehilangan data penelitian. **Implemented** di migration; FK/CHECK/foodCode trigger diuji pada PG17 sementara. |
+| D-08 | Recommendation tetap diproses manual di Altair AI Studio Educational 2026.1.1; backend tidak menghitung CF. | Batas produk dan penelitian. **Planned** untuk workflow CSV; tidak ada algoritme backend. |
+| D-09 | Model auth tambahan `Session`, `Account`, `Verification`; hash berada di Account, bukan kolom User.passwordHash. | Bentuk storage standar Better Auth; menjaga kompatibilitas library dan tidak menggandakan hash. Ini berbeda dari field-level draft, tetapi perilaku password security tetap terpenuhi. |
+| D-10 | SQLite `prisma/dev.db` lama dipertahankan dan tidak otomatis diimpor. | Menghindari penghapusan/konversi data tanpa persetujuan. Migrasi manual bila diperlukan. |
+| D-11 | Food Code uppercase, unique, dan immutable; generated Food ID juga immutable. | Identifier untuk dataset penelitian harus stabil. Unique constraint + PostgreSQL trigger + API validation. **Implemented**. |
+| D-12 | Food dengan firstUsedAt/rating/recommendation history hanya dapat dinonaktifkan; unused Food dapat hard-delete. | Menjaga sejarah penelitian tanpa cascade. Server eligibility check + FK `RESTRICT` + DB trigger untuk `firstUsedAt`. **Implemented**. |
+| D-13 | CSV catalog import insert-only dan all-or-nothing; preview draft disimpan privat memakai checksum/staging key. | Mencegah overwrite dan partial commit; concurrent commit dikunci lewat status row dan unique Food Code. **Implemented**. |
+| D-14 | Foto disimpan di `FOODREC_STORAGE_DIR` dengan UUID, signature/MIME/extension validation dan URL handler terbatas. | Menghindari path traversal/nama file user; production perlu persistent volume/object storage. Local backend **Implemented**, deployment storage **Pending Validation**. |
+| D-15 | Seed katalog 40 Food menggunakan `createMany(skipDuplicates)`; tidak meng-update Food existing. | Initial catalog tanpa dummy rating/recommendation. **Implemented**. |
+| D-16 | Integration test harus memakai database `_test` terpisah; runner apply migration/seed tanpa reset. | Melindungi dev/prod data dan menjaga audit history. **Implemented**; PostgreSQL suite lulus. |
+| D-17 | Satu Rating per `(userId,foodId)`; USER dapat upsert score 1–5; `firstUsedAt` di-set satu kali saat rating pertama dalam transaction yang mengunci Food row. | Mencegah duplicate rating dan race dengan deactivation/delete; tidak mengimplementasikan recommendation algorithm. **Implemented**. |
+| D-18 | ADMIN rating export adalah snapshot privat immutable, header `user_id,food_id,rating`, SHA-256 checksum; download admin-only. | Meminimalkan PII dan menjaga reproducibility Altair; storage provider production masih perlu konfigurasi. **Implemented**. |
+| D-19 | Rating snapshot dikumpulkan dalam satu query dan dibuffer sebelum file write. | Batas MVP; cursor streaming diperlukan bila dataset tumbuh. Performa **Pending Validation**. |

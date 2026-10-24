@@ -1,0 +1,200 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Role {
+  USER
+  ADMIN
+}
+
+enum FoodImportStatus {
+  VALIDATED
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+enum RecommendationBatchStatus {
+  DRAFT
+  VALIDATED
+  PUBLISHED
+  SUPERSEDED
+}
+
+/// Better Auth stores credential hashes in Account.password, not as plaintext on User.
+model User {
+  id            Int       @id @default(autoincrement())
+  name          String    @db.VarChar(120)
+  email         String    @unique @db.VarChar(254)
+  emailVerified Boolean   @default(false)
+  image         String?   @db.Text
+  role          Role      @default(USER)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  sessions      Session[]
+  accounts      Account[]
+  ratings       Rating[]
+  foodImports   FoodImport[] @relation("FoodImportAdmin")
+  datasetExports DatasetExport[] @relation("DatasetExportAdmin")
+  batches       RecommendationBatch[] @relation("RecommendationBatchAdmin")
+  recommendations Recommendation[] @relation("RecommendationUser")
+}
+
+model Session {
+  id        Int      @id @default(autoincrement())
+  expiresAt DateTime
+  token     String   @unique @db.VarChar(255)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  ipAddress String?  @db.VarChar(64)
+  userAgent String?  @db.Text
+  userId    Int
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+model Account {
+  id                    Int       @id @default(autoincrement())
+  accountId             String    @db.VarChar(255)
+  providerId            String    @db.VarChar(100)
+  userId                Int
+  accessToken           String?   @db.Text
+  refreshToken          String?   @db.Text
+  idToken               String?   @db.Text
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?   @db.Text
+  password              String?   @db.Text
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([providerId, accountId])
+  @@index([userId])
+}
+
+model Verification {
+  id         Int      @id @default(autoincrement())
+  identifier String   @db.VarChar(255)
+  value      String   @db.Text
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([identifier])
+}
+
+model Food {
+  id           Int      @id @default(autoincrement())
+  foodCode     String   @unique @db.VarChar(64)
+  name         String   @db.VarChar(180)
+  description  String?  @db.Text
+  category     String   @db.VarChar(100)
+  taste        String   @db.VarChar(100)
+  healthLevel  String?  @db.VarChar(80)
+  origin       String   @db.VarChar(100)
+  proteinType  String?  @db.VarChar(100)
+  priceCategory String? @db.VarChar(80)
+  mealTime     String?  @db.VarChar(80)
+  dietCategory String?  @db.VarChar(100)
+  texture      String?  @db.VarChar(100)
+  imageUrl     String?  @db.Text
+  isActive     Boolean  @default(true)
+  firstUsedAt  DateTime?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  ratings      Rating[]
+  recommendations Recommendation[]
+
+  @@index([isActive, category])
+}
+
+model Rating {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  foodId    Int
+  rating    Int
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  user      User     @relation(fields: [userId], references: [id], onDelete: Restrict)
+  food      Food     @relation(fields: [foodId], references: [id], onDelete: Restrict)
+
+  @@unique([userId, foodId])
+  @@index([userId])
+  @@index([foodId])
+}
+
+model FoodImport {
+  id           Int             @id @default(autoincrement())
+  adminId      Int
+  filename     String          @db.VarChar(255)
+  fileChecksum String          @db.VarChar(64)
+  totalRows    Int
+  insertedRows Int
+  status       FoodImportStatus
+  stagingKey   String?         @db.VarChar(64)
+  createdAt    DateTime        @default(now())
+  admin        User            @relation("FoodImportAdmin", fields: [adminId], references: [id], onDelete: Restrict)
+
+  @@index([adminId, createdAt])
+  @@index([fileChecksum])
+}
+
+model DatasetExport {
+  id           Int      @id @default(autoincrement())
+  adminId      Int
+  filename     String   @db.VarChar(255)
+  fileChecksum String   @db.VarChar(64)
+  rowCount     Int
+  filePath     String   @db.Text
+  createdAt    DateTime @default(now())
+  admin        User     @relation("DatasetExportAdmin", fields: [adminId], references: [id], onDelete: Restrict)
+  batches      RecommendationBatch[]
+
+  @@index([adminId, createdAt])
+  @@index([fileChecksum])
+}
+
+model RecommendationBatch {
+  id              Int                       @id @default(autoincrement())
+  datasetExportId Int
+  adminId         Int
+  status          RecommendationBatchStatus @default(DRAFT)
+  kNeighbors      Int
+  topN            Int
+  similarity      String                    @default("COSINE") @db.VarChar(40)
+  fileChecksum    String                    @db.VarChar(64)
+  createdAt       DateTime                  @default(now())
+  publishedAt     DateTime?
+  datasetExport   DatasetExport             @relation(fields: [datasetExportId], references: [id], onDelete: Restrict)
+  admin           User                      @relation("RecommendationBatchAdmin", fields: [adminId], references: [id], onDelete: Restrict)
+  recommendations Recommendation[]
+
+  @@index([datasetExportId])
+  @@index([adminId, createdAt])
+  @@index([status, publishedAt])
+}
+
+model Recommendation {
+  id        Int      @id @default(autoincrement())
+  batchId   Int
+  userId    Int
+  foodId    Int
+  rank      Int
+  createdAt DateTime @default(now())
+  batch     RecommendationBatch @relation(fields: [batchId], references: [id], onDelete: Restrict)
+  user      User     @relation("RecommendationUser", fields: [userId], references: [id], onDelete: Restrict)
+  food      Food     @relation(fields: [foodId], references: [id], onDelete: Restrict)
+
+  @@unique([batchId, userId, foodId])
+  @@unique([batchId, userId, rank])
+  @@index([userId, batchId])
+  @@index([foodId])
+}

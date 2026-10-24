@@ -1,0 +1,35 @@
+@import "tailwindcss";
+
+@theme inline {
+  --color-primary: #f97316;
+  --color-primary-hover: #ea580c;
+  --color-soft: #fff7ed;
+  --color-accent: #14532d;
+  --color-background: #ffffff;
+  --color-foreground: #111827;
+  --color-secondary: #6b7280;
+  --color-border: #e5e7eb;
+  --font-sans: var(--font-plus-jakarta);
+  --radius-card: 1rem;
+}
+
+:root {
+  color-scheme: light;
+  background: #ffffff;
+  color: #111827;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body { min-height: 100vh; margin: 0; }
+button, input { font: inherit; }
+button, a { -webkit-tap-highlight-color: transparent; }
+::selection { background: #fed7aa; color: #7c2d12; }
+:focus-visible { outline: 3px solid #fb923c; outline-offset: 3px; }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
+}

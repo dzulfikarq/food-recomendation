@@ -1,0 +1,124 @@
+import assert from "node:assert/strict";
+import { createServer } from "node:http";
+import { randomUUID } from "node:crypto";
+import test from "node:test";
+import "@/tests/helpers/test-database";
+
+test("USER rating lifecycle, private rating history, and ADMIN dataset CSV snapshot", async () => {
+  Reflect.set(process.env, "NODE_ENV", "production");
+  Reflect.set(process.env, "AUTH_URL", "http://127.0.0.1:3103");
+  const [{ default: next }, { hashPassword }, { readApplicationEnvironment }, { prisma }] = await Promise.all([
+    import("next"),
+    import("better-auth/crypto"),
+    import("@/lib/env"),
+    import("@/lib/prisma")
+  ]);
+  const env = readApplicationEnvironment();
+  const baseUrl = env.AUTH_URL;
+  const email = `rating-user-${randomUUID()}@example.test`;
+  const password = "rating-integration-password";
+  let userId: number | undefined;
+  let foodId: number | undefined;
+
+  const app = next({ dev: false, hostname: "127.0.0.1", port: 3103 });
+  await app.prepare();
+  const server = createServer(app.getRequestHandler());
+  await new Promise<void>((resolve, reject) => {
+    server.once("error", reject);
+    server.listen(3103, "127.0.0.1", resolve);
+  });
+
+  const page = (path: string, cookie?: string) => fetch(`${baseUrl}${path}`, { headers: cookie ? { cookie } : undefined, redirect: "manual" });
+  const api = (path: string, method = "GET", body?: unknown, cookie?: string) => fetch(`${baseUrl}${path}`, {
+    method,
+    headers: { origin: baseUrl, ...(body === undefined ? {} : { "content-type": "application/json" }), ...(cookie ? { cookie } : {}) },
+    ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+    redirect: "manual"
+  });
+  const cookiesFrom = (response: Response) => response.headers.getSetCookie().map((value) => value.split(";", 1)[0]).join("; ");
+
+  try {
+    assert.equal((await page("/foods")).status, 200);
+    assert.equal((await page("/my-ratings")).status, 307);
+    assert.equal((await api("/api/my-ratings")).status, 401);
+
+    const user = await prisma.user.create({ data: { name: "Rating Integration User", email, emailVerified: true } });
+    userId = user.id;
+    await prisma.account.create({ data: { accountId: String(user.id), providerId: "credential", userId: user.id, password: await hashPassword(password) } });
+    const login = await api("/api/auth/sign-in/email", "POST", { email, password });
+    assert.equal(login.status, 200);
+    const userCookie = cookiesFrom(login);
+
+    const food = await prisma.food.create({ data: {
+      foodCode: `TEST-RATE-${randomUUID().slice(0, 8).toUpperCase()}`,
+      name: "Rating Integration Food",
+      category: "Camilan",
+      taste: "Gurih",
+      origin: "Indonesia"
+    } });
+    foodId = food.id;
+    const baselineRatingCount = await prisma.rating.count();
+    const foodList = await api(`/api/foods?search=${encodeURIComponent(food.foodCode)}`);
+    assert.equal(foodList.status, 200);
+    const foodPayload = await foodList.json();
+    assert.ok(foodPayload.data.foods.some((item: { id: number }) => item.id === food.id));
+    assert.equal((await api(`/api/foods/${food.id}`)).status, 200);
+
+    const deniedAdminRating = await api(`/api/foods/${food.id}/rating`, "PUT", { rating: 5 });
+    assert.equal(deniedAdminRating.status, 401);
+    assert.equal((await api(`/api/foods/${food.id}/rating`, "PUT", { rating: 6 }, userCookie)).status, 422);
+
+    const firstRating = await api(`/api/foods/${food.id}/rating`, "PUT", { rating: 5 }, userCookie);
+    assert.equal(firstRating.status, 200, await firstRating.clone().text());
+    const firstUsedAt = (await prisma.food.findUniqueOrThrow({ where: { id: food.id } })).firstUsedAt;
+    assert.ok(firstUsedAt);
+    assert.equal(await prisma.rating.count({ where: { userId, foodId: food.id } }), 1);
+
+    const updatedRating = await api(`/api/foods/${food.id}/rating`, "PUT", { rating: 3 }, userCookie);
+    assert.equal(updatedRating.status, 200);
+    assert.equal(await prisma.rating.count({ where: { userId, foodId: food.id } }), 1);
+    assert.equal((await prisma.rating.findFirstOrThrow({ where: { userId, foodId: food.id } })).rating, 3);
+    assert.equal((await prisma.food.findUniqueOrThrow({ where: { id: food.id } })).firstUsedAt?.getTime(), firstUsedAt.getTime());
+
+    const history = await api("/api/my-ratings", "GET", undefined, userCookie);
+    assert.equal(history.status, 200);
+    assert.equal((await history.json()).data.ratings[0].rating, 3);
+    assert.equal((await page("/my-ratings", userCookie)).status, 200);
+    assert.match(await (await page("/my-ratings", userCookie)).text(), /Rating Integration User|Rating Saya|Nasi Goreng/);
+
+    const adminLogin = await api("/api/auth/sign-in/email", "POST", { email: env.ADMIN_EMAIL, password: env.ADMIN_PASSWORD });
+    assert.equal(adminLogin.status, 200);
+    const adminCookie = cookiesFrom(adminLogin);
+    assert.equal((await api(`/api/foods/${food.id}/rating`, "PUT", { rating: 2 }, adminCookie)).status, 403);
+    assert.equal((await api("/api/my-ratings", "GET", undefined, adminCookie)).status, 403);
+    assert.equal((await page("/admin/ratings", adminCookie)).status, 200);
+    assert.equal((await api("/api/admin/rating-datasets", "GET", undefined, adminCookie)).status, 200);
+
+    const exportResponse = await api("/api/admin/rating-datasets", "POST", undefined, adminCookie);
+    assert.equal(exportResponse.status, 201, await exportResponse.clone().text());
+    const datasetExport = (await exportResponse.json()).data;
+    assert.equal(datasetExport.rowCount, baselineRatingCount + 1);
+    assert.equal("filePath" in datasetExport, false);
+    const download = await api(`/api/admin/rating-datasets/${datasetExport.id}/download`, "GET", undefined, adminCookie);
+    assert.equal(download.status, 200);
+    const csv = await download.text();
+    assert.match(csv, /^user_id,food_id,rating\r\n/);
+    assert.match(csv, new RegExp(`^${user.id},${food.id},3\\r?$`, "m"));
+    assert.equal(csv.includes(email), false);
+
+    const userDownload = await api(`/api/admin/rating-datasets/${datasetExport.id}/download`, "GET", undefined, userCookie);
+    assert.equal(userDownload.status, 403);
+    await assert.rejects(prisma.datasetExport.update({ where: { id: datasetExport.id }, data: { filename: "changed.csv" } }));
+  } finally {
+    if (userId !== undefined && foodId !== undefined) {
+      await prisma.rating.deleteMany({ where: { userId, foodId } });
+      await prisma.food.updateMany({ where: { id: foodId }, data: { firstUsedAt: null } });
+    }
+    if (userId !== undefined) await prisma.user.delete({ where: { id: userId } });
+    if (foodId !== undefined) await prisma.food.deleteMany({ where: { id: foodId } });
+    server.closeAllConnections();
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+    await app.close();
+    await prisma.$disconnect();
+  }
+});

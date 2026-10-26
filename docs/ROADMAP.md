@@ -1,6 +1,6 @@
 # Roadmap FoodRec
 
-**Implemented** = kode tersedia. **Planned** = belum dikerjakan. **Pending Validation** = implementasi belum dapat diverifikasi end-to-end atau keputusan belum disahkan.
+**Implemented** = kode tersedia. **Tested** = automated/integration check lulus. **Planned** = belum dikerjakan. **Pending Validation** = butuh dataset nyata atau validasi operasional.
 
 | Fase | Cakupan | Status | Dependensi |
 | --- | --- | --- | --- |
@@ -8,9 +8,9 @@
 | [x] 2 — Database Foundation, Authentication & Authorization | PostgreSQL/Prisma tujuh model, migration, Better Auth database sessions, register/login/logout, USER/ADMIN guard, admin dashboard/seed. | **Implemented**; migration, role/auth integration, seed, DB constraints lulus pada PostgreSQL sementara. Production DB **Pending Validation**. | Fase 1 |
 | [x] 3 — Food Management | Admin list/search/filter/sort/pagination, CRUD, image upload, hybrid delete/reactivate, CSV template/preview/insert-only commit, FoodImport history, seed 40 foods. | **Implemented**; PostgreSQL CRUD/image/import integration lulus. Production storage **Pending Validation**. | Fase 2 |
 | [x] 4 — Rating workflows & dataset export | Public active catalog, USER rating/history, ADMIN private immutable snapshot CSV `user_id,food_id,rating`. | **Implemented**; rating/session/export/checksum integration lulus. CSV rating contract tervalidasi. | Fase 3 |
-| [ ] 5 — Altair processing/import | Workflow manual Altair AI Studio Educational 2026.1.1, impor hasil rekomendasi sebagai draft. | **Planned**; result schema/algorithm/output **Pending Validation** | Fase 4 |
-| [ ] 6 — Result validation and audit | Validasi referensi, rank, duplikasi, laporan, status batch dan audit. | **Planned** | Fase 5 |
-| [ ] 7 — Recommendation publication | Publikasi batch konsisten dan halaman rekomendasi pengguna; tanpa algoritme backend. | **Planned**; cold-start/tie rules **Pending Validation** | Fase 6 |
+| [ ] 5 — Altair processing | User menjalankan UBCF/Cosine/user k-NN manual di Altair dan bertukar CSV. | Kontrak aplikasi **Implemented**; kompatibilitas file Altair penelitian **Pending Validation** | Fase 4 |
+| [x] 6 — Result validation and audit | Validasi referensi, rank, duplikasi, stale warnings, validation report, lifecycle dan audit. | **Implemented; parser/API/PostgreSQL integration Tested** | Fase 5 |
+| [x] 7 — Recommendation publication | Atomic publication, supersede history, admin detail, owner-only recommendation page. | **Implemented; concurrent publication/owner/filter integration Tested**; visual review **Pending Validation** | Fase 6 |
 | [ ] 8 — Hardening and release | Security/performance/accessibility, observability, backup/restore, deployment. | **Planned** | Fase 1–7 |
 
 ## Acceptance checks Fase 1–4
@@ -31,4 +31,4 @@
 - [ ] Manual mobile/tablet/accessibility review.
 - [ ] Production object storage/persistent volume, DB operations, shared rate-limit storage, and production security/performance review.
 
-Fase 5+ Altair result processing/import and recommendation publication remain intentionally absent. Update statuses only after implementation plus verification.
+Altair tetap proses manual; validasi round-trip dengan file hasil penelitian sebenarnya masih diperlukan. Tidak ada CF backend, integrasi otomatis Altair, atau scheduler.

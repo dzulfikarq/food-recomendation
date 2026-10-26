@@ -28,20 +28,21 @@ enum RecommendationBatchStatus {
 
 /// Better Auth stores credential hashes in Account.password, not as plaintext on User.
 model User {
-  id            Int       @id @default(autoincrement())
-  name          String    @db.VarChar(120)
-  email         String    @unique @db.VarChar(254)
-  emailVerified Boolean   @default(false)
-  image         String?   @db.Text
-  role          Role      @default(USER)
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-  sessions      Session[]
-  accounts      Account[]
-  ratings       Rating[]
-  foodImports   FoodImport[] @relation("FoodImportAdmin")
-  datasetExports DatasetExport[] @relation("DatasetExportAdmin")
-  batches       RecommendationBatch[] @relation("RecommendationBatchAdmin")
+  id               Int       @id @default(autoincrement())
+  name             String    @db.VarChar(120)
+  email            String    @unique @db.VarChar(254)
+  emailVerified    Boolean   @default(false)
+  image            String?   @db.Text
+  role             Role      @default(USER)
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+  sessions         Session[]
+  accounts         Account[]
+  ratings          Rating[]
+  foodImports      FoodImport[] @relation("FoodImportAdmin")
+  datasetExports   DatasetExport[] @relation("DatasetExportAdmin")
+  batches          RecommendationBatch[] @relation("RecommendationBatchAdmin")
+  publishedBatches RecommendationBatch[] @relation("RecommendationBatchPublisher")
   recommendations Recommendation[] @relation("RecommendationUser")
 }
 
@@ -163,22 +164,28 @@ model DatasetExport {
 }
 
 model RecommendationBatch {
-  id              Int                       @id @default(autoincrement())
+  id               Int                       @id @default(autoincrement())
   datasetExportId Int
   adminId         Int
+  publishedById   Int?
   status          RecommendationBatchStatus @default(DRAFT)
   kNeighbors      Int
   topN            Int
   similarity      String                    @default("COSINE") @db.VarChar(40)
   fileChecksum    String                    @db.VarChar(64)
+  filename        String?                   @db.VarChar(255)
+  filePath        String?                   @db.Text
+  validationReport Json?
   createdAt       DateTime                  @default(now())
   publishedAt     DateTime?
   datasetExport   DatasetExport             @relation(fields: [datasetExportId], references: [id], onDelete: Restrict)
   admin           User                      @relation("RecommendationBatchAdmin", fields: [adminId], references: [id], onDelete: Restrict)
+  publishedBy     User?                     @relation("RecommendationBatchPublisher", fields: [publishedById], references: [id], onDelete: Restrict)
   recommendations Recommendation[]
 
   @@index([datasetExportId])
   @@index([adminId, createdAt])
+  @@index([publishedById])
   @@index([status, publishedAt])
 }
 

@@ -10,13 +10,18 @@ Next.js 16 App Router, React 19, TypeScript strict, Tailwind CSS 4, Prisma ORM 7
 app/
   (public)/              home + public layout
   (public)/foods/         public active catalog
+  (public)/foods/[id]/    public Food detail
   (public)/my-ratings/    USER-only rating history
+  (public)/recommendations/ USER-only published recommendations
   (auth)/                login/register + auth layout
   admin/                 protected dashboard + Food Management + Data Rating pages
   admin/ratings/         rating dataset snapshot history
+  admin/recommendations/ recommendation import, validation, batch history/detail
   api/auth/[...all]/     Better Auth handler
   api/admin/foods/       role-guarded Food CRUD/status/image/CSV routes
   api/admin/rating-datasets/ rating snapshot/create/download
+  api/admin/recommendation-batches/ import, validate, list/detail and atomic publish
+  api/me/recommendations/ owner-only published results
   api/foods/             public catalog + USER rating API
   api/my-ratings/        owner-only rating history API
   api/food-images/       safe image serving by generated filename
@@ -24,7 +29,9 @@ components/
   auth/                  auth forms
   admin/foods/           Food form, filter/list controls, import preview
   admin/ratings/         snapshot export control
+  admin/recommendations/ upload/preview, validation report, publish confirmation
   foods/                 Food card + rating selector
+  recommendations/       ranked Food cards and empty/error states
   site/                  public header/footer/logout
   ui.tsx                 shared primitives
 lib/
@@ -44,7 +51,7 @@ scripts/
   test-integration.mjs   dedicated `_test` DB migration/seed/test runner
 ```
 
-Server Components default. Client Components dipakai untuk auth forms, Food form/upload preview, import preview/commit, Rating input, dan dataset export/loading states. Mutasi auth melewati Server Actions; Food/Rating/export mutations memakai Route Handlers terproteksi.
+Server Components default. Client Components dipakai untuk auth forms, Food form/upload preview, import preview/commit, Rating input, dataset export/loading, recommendation CSV preview/publish confirmation, dan recommendation retry/loading states. Mutasi auth melewati Server Actions; Food/Rating/export/recommendation mutations memakai Route Handlers terproteksi.
 
 ## Authentication dan authorization
 
@@ -72,12 +79,22 @@ Better Auth menyimpan credential hash di `Account.password`. Ini mengikuti skema
 - ADMIN snapshot memakai satu query terurut, membuat CSV `user_id,food_id,rating`, hash SHA-256 dan private file key. `DatasetExport` metadata immutable; download mengecek checksum dan hanya ADMIN. Snapshot saat ini dibuffer di memory; gunakan cursor streaming bila ukuran dataset tumbuh material.
 - Ekspor tidak memasukkan nama, email, password, atau data personal; tidak ada UBCF/Cosine code atau Altair API.
 
+## Recommendation import and publication Fase 6–7
+
+- ADMIN memilih `DatasetExport` immutable, mengunggah CSV privat `user_id,item_id,rank`, dan mencatat k, Top-N, COSINE, checksum, filename, serta laporan validasi. `item_id` selalu dicocokkan ke `Food.id`.
+- Validasi memeriksa header/UTF-8/ukuran, ID integer, referensi User/Food, user dalam snapshot, pasangan duplikat, sequence rank, Top-N, kandidat yang telah dinilai pada snapshot, dan Food aktif. Error struktural/referensial all-or-nothing; batch invalid tersimpan sebagai DRAFT tanpa Recommendation rows.
+- Perubahan rating setelah snapshot menjadi warning stale, bukan bukti proses Altair. Kandidat yang baru dinilai setelah export juga diberi warning dan disembunyikan dari hasil user.
+- Publish memuat ulang file dan dataset, memvalidasi ulang referensi/rank/Food, lalu mengganti status dalam satu PostgreSQL transaction. Advisory transaction lock menserialisasi publisher dan partial unique index menjaga maksimal satu batch PUBLISHED. Batch lama menjadi SUPERSEDED, riwayat tidak dihapus.
+- `/api/me/recommendations` mengambil user dari session, tidak menerima userId frontend, memakai batch PUBLISHED, serta menyaring Food nonaktif dan rating milik user saat ini. Tidak ada perhitungan CF, skor similarity, scheduler, atau refresh otomatis.
+- Endpoint admin: `GET /api/admin/recommendation-batches`, `POST /api/admin/recommendation-batches/import`, `GET /api/admin/recommendation-batches/:id`, `POST /api/admin/recommendation-batches/:id/publish`. Endpoint USER: `GET /api/me/recommendations`.
+- UBCF, Cosine Similarity, dan user k-NN dijalankan manual oleh ADMIN di Altair AI Studio Educational 2026.1.1. Nilai k dan Top-N disimpan per batch, tidak menjadi default algoritme permanen.
+
 ## PostgreSQL dan lifecycle
 
 `lib/prisma.ts` membuat satu Prisma Client dan adapter PostgreSQL, memakai global singleton saat hot reload. Environment divalidasi melalui `lib/env.ts`; `prisma.config.ts` memakai schema database URL yang sama.
 
 Initial migration memiliki FK restrictive untuk histori penelitian, check constraints skor/rank/count, trigger immutable `Food.foodCode`/`DatasetExport`, serta trigger perlindungan histori. Hanya record teknis Account/Session cascade ke User. Local Docker Compose memakai named volume `foodrec-postgres` dan tidak menghapus volume saat stop.
 
-## Recommendation boundary — Planned
+## Recommendation boundary — Implemented, end-to-end validation pending
 
-Backend FoodRec hanya menjadi sumber dataset dan penyimpan output pada fase selanjutnya. User-Based Collaborative Filtering dan Cosine Similarity diproses manual di Altair AI Studio Educational 2026.1.1 melalui CSV. Tidak ada kode algoritma atau integrasi Altair pada fase ini.
+Backend FoodRec hanya menjadi sumber dataset, memvalidasi CSV, menyimpan, dan menyajikan output. User-Based Collaborative Filtering dan Cosine Similarity diproses manual di Altair AI Studio Educational 2026.1.1. Kompatibilitas dengan file hasil Altair penelitian sesungguhnya masih **Pending Validation**; tidak ada kode algoritma atau integrasi Altair.

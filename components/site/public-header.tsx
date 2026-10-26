@@ -21,7 +21,7 @@ export async function PublicHeader() {
           <Link href="/" className="inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold text-gray-900 hover:bg-gray-50"><House size={16} aria-hidden="true" /> Beranda</Link>
           <Link href="/foods" className="inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50"><UtensilsCrossed size={16} aria-hidden="true" /> Jelajahi makanan</Link>
           {showRatings && <Link href={ratingHref} className="inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50"><Star size={16} aria-hidden="true" /> Rating saya</Link>}
-          <span aria-disabled="true" title="Segera hadir" className="inline-flex cursor-not-allowed items-center gap-2 px-2 py-2 text-sm text-gray-400"><Sparkles size={16} aria-hidden="true" /> Rekomendasi <span className="rounded-md bg-gray-100 px-1.5 py-0.5 text-[9px] font-medium">Segera hadir</span></span>
+          <Link href="/recommendations" className="inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50"><Sparkles size={16} aria-hidden="true" /> Rekomendasi</Link>
         </nav>
 
         <div className="flex shrink-0 items-center gap-2">
@@ -43,7 +43,7 @@ export async function PublicHeader() {
         <Link href="/" className="shrink-0 rounded-lg bg-soft px-3 py-1.5 text-xs font-semibold text-orange-900">Beranda</Link>
         <Link href="/foods" className="shrink-0 rounded-lg px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50">Jelajahi makanan</Link>
         {showRatings && <Link href={ratingHref} className="shrink-0 rounded-lg px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50">Rating saya</Link>}
-        <span aria-disabled="true" className="shrink-0 rounded-lg px-3 py-1.5 text-xs text-gray-400">Rekomendasi · Segera hadir</span>
+        <Link href="/recommendations" className="shrink-0 rounded-lg px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50">Rekomendasi</Link>
       </nav>
     </header>
   );

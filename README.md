@@ -4,10 +4,10 @@ FoodRec adalah aplikasi rekomendasi makanan berbasis pola rating. User-Based Col
 
 ## Status
 
-- **Implemented:** Fase 1–4; Food Management, public active catalog, USER rating 1–5/history, dan ADMIN rating snapshot CSV.
-- **Verified locally:** CRUD/API, image validation/replace/remove, hybrid delete, concurrent atomic CSV import, idempotent seed, rating lifecycle/firstUsedAt, private CSV export/checksum, role guards, migrations, build, lint, typecheck, unit/integration tests.
-- **Pending Validation:** deployment database, production security/performance review, dan manual visual/accessibility review lintas perangkat.
-- **Planned:** manual Altair processing, recommendation-result import/validation/publication, public recommendation pages.
+- **Implemented:** Fase 1–4, ADMIN recommendation CSV import/validation/preview/atomic publish, batch history, dan halaman rekomendasi privat USER.
+- **Tested:** CSV validation, owner-only query/filter, migration, API role guards, publication replacement/concurrency; lihat `yarn test` dan `npm run test:integration`.
+- **Pending Validation:** round-trip dengan file hasil Altair penelitian sesungguhnya, production database/storage, security/performance production, dan visual/accessibility review lintas perangkat.
+- **Manual:** UBCF, Cosine Similarity, dan user k-NN tetap dijalankan di Altair AI Studio Educational 2026.1.1; website tidak menghitung algoritme.
 
 Food Management dan Data Rating hanya untuk ADMIN (`/admin/foods`, `/admin/ratings`). USER dapat membuka `/foods`, memberi rating, dan melihat `/my-ratings`. Recommendation pages dan model backend **belum tersedia**. Detail: [`docs/ROADMAP.md`](docs/ROADMAP.md).
 
@@ -45,6 +45,15 @@ npm run dev
 
 Buka `http://localhost:3000`. `db:seed` membuat ADMIN hanya bila email belum ada; bila email sudah menjadi USER, proses gagal tanpa menaikkan role. `db:seed:foods` menambahkan 40 makanan awal dengan `createMany(skipDuplicates)`, tanpa memperbarui record yang ada.
 
+## Workflow rekomendasi
+
+1. ADMIN membuat dan mengunduh snapshot privat di `/admin/ratings` atau `/admin/recommendations`.
+2. ADMIN memproses snapshot manual di Altair AI Studio Educational 2026.1.1 (UBCF, Cosine Similarity, user k-NN), lalu mengekspor CSV ber-header `user_id,item_id,rank`. `item_id` harus memakai `Food.id`.
+3. Di `/admin/recommendations`, pilih DatasetExport sumber, isi k/Top-N yang benar-benar dipakai, unggah CSV, tinjau error/warning/preview, lalu konfirmasi **Terbitkan Rekomendasi**. Upload tidak otomatis aktif; invalid batch tidak menyimpan Recommendation rows.
+4. USER melihat hasil batch PUBLISHED miliknya di `/recommendations`. Food nonaktif dan rekomendasi yang sudah dinilai disembunyikan. Perubahan rating tidak menghitung ulang algoritme.
+
+CSV hasil maksimal 2 MB/10.000 baris, UTF-8, header wajib persis `user_id,item_id,rank`; ID dan rank integer positif, rank per user berurutan mulai 1 dan tidak melebihi Top-N. Integrasi file Altair penelitian sesungguhnya masih **Pending Validation**.
+
 Untuk integration test, `foodrec_test` dibuat otomatis bila role DB memiliki privilege `CREATEDB`; jika tidak, buat sekali (contoh: `createdb -h localhost -U foodrec foodrec_test`). Tanpa `FOODREC_TEST_DATABASE_URL`, runner memakai nama `<database>_test` dari `DATABASE_URL`. Jalankan:
 
 ```sh
@@ -52,7 +61,7 @@ npm run build
 npm run test:integration
 ```
 
-Script memerlukan production build, menerapkan migration dan seed pada database `_test`; tidak melakukan reset. Test menambah FoodImport/DatasetExport audit records; test DB terpisah dari DB development.
+Script memerlukan production build, menerapkan migration dan seed pada database `_test`; tidak melakukan reset. Test menambah FoodImport/DatasetExport/RecommendationBatch audit records serta fixture user/food yang terikat histori; database `_test` harus terpisah dari DB development.
 
 ## Perintah
 
@@ -64,12 +73,13 @@ Script memerlukan production build, menerapkan migration dan seed pada database 
 | `npm run lint` | ESLint |
 | `npm run typecheck` | TypeScript check |
 | `npm test` | Unit test validasi autentikasi |
-| `npm run test:integration` | PostgreSQL/Auth/Food/Rating integration; perlu DB `_test` dan port `3101`–`3103` kosong |
+| `npm run test:integration` | PostgreSQL/Auth/Food/Rating/Recommendation integration; perlu DB `_test` dan port `3101`–`3104` kosong |
 | `npm run db:generate` | Generate Prisma Client |
 | `npm run db:migrate` | Terapkan/dev migration PostgreSQL |
 | `npm run db:migrate:deploy` | Terapkan migration pada deployment |
 | `npm run db:seed` | Provision ADMIN dari environment |
 | `npm run db:seed:foods` | Seed 40 makanan awal, insert-only/idempotent |
+| `npm run db:seed:demo-ratings` | Tambah 20 user demo dan rating synthetic untuk setiap Food lokal; existing ratings tidak ditimpa |
 | `npm run db:studio` | Prisma Studio |
 
 ## Implementasi auth

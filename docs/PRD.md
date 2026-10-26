@@ -1,16 +1,16 @@
 # Product Requirements Document — FoodRec
 
-Status fitur menggunakan **Implemented**, **Planned**, dan **Pending Validation**. Desain fitur masa depan bukan bukti fitur tersebut tersedia.
+Status fitur menggunakan **Implemented** (kode tersedia), **Tested** (automated/integration check lulus), **Planned** (belum dibangun), dan **Pending Validation** (butuh validasi data/operasional nyata).
 
 ## 1. Product Overview
 
 FoodRec adalah aplikasi web untuk membangun sistem rekomendasi makanan dari preferensi/rating pengguna. Website menyimpan akun, katalog, dan data penelitian. User-Based Collaborative Filtering dengan Cosine Similarity diproses manual oleh administrator di **Altair AI Studio Educational 2026.1.1**; website bertukar dataset dan hasil lewat CSV pada fase mendatang. Algoritma tidak dijalankan backend.
 
-Fase 1–2 menyediakan foundation, design system, PostgreSQL, autentikasi, dan role. Fase 3 menambahkan Food Management; Fase 4 menambahkan katalog/rating USER dan snapshot CSV ADMIN. Fase 5+ tetap belum dibangun.
+Fase 1–4 menyediakan foundation, autentikasi, Food Management, rating, dan snapshot CSV. Fase 6–7 menambahkan validasi hasil Altair, manajemen batch, publikasi, dan halaman rekomendasi USER. Pemrosesan Altair tetap manual.
 
-- **Implemented:** Fase 1–4; foundation, auth/role, Food Management, user catalog/rating/history, private rating CSV snapshot, dan 40-item seed. Integration diuji pada database `_test` terpisah.
-- **Planned:** manual Altair processing, recommendation-result import/validation/publication, dan public recommendation UI.
-- **Pending Validation:** storage/deployment production, security/performance production, dan review visual/accessibility lintas viewport.
+- **Implemented:** foundation/auth, Food Management, rating/export, recommendation import/validation/publish, batch history, dan halaman rekomendasi personal.
+- **Tested:** unit CSV checks dan PostgreSQL integration pada database `_test`; deployment database, storage, visual/accessibility, dan security/performance tetap terpisah.
+- **Pending Validation:** round-trip dengan file penelitian Altair nyata dan production operations.
 
 ## 2. Problem Statement
 
@@ -30,7 +30,7 @@ Pengguna membutuhkan cara menemukan makanan sesuai preferensi, sementara pola ra
 | --- | --- | --- |
 | Guest | Membuka public home, register, login. Tidak dapat membuka `/admin` atau Food Management API. | **Implemented; integration test lulus**. |
 | USER | Home, katalog Food aktif, rating 1–5, riwayat rating, login/logout. Tidak dapat membuka `/admin`. Rekomendasi personal belum tersedia. | **Implemented; integration test lulus**. |
-| ADMIN | Login, protected dashboard, list/create/edit Food, upload image, hybrid delete/status, CSV insert-only import, export snapshot rating. Altair/recommendation workflow belum tersedia. | **Implemented; integration lulus**. |
+| ADMIN | Semua operasi Food dan snapshot rating; impor/validasi CSV Altair, preview, publikasi atomic, dan riwayat batch. | **Implemented; API/DB integration Tested**; output Altair penelitian nyata **Pending Validation**. |
 
 ## 5. Functional Requirements
 
@@ -55,6 +55,7 @@ Pengguna membutuhkan cara menemukan makanan sesuai preferensi, sementara pola ra
 | U-02 | USER memberi/memperbarui rating integer 1–5; satu rating per pasangan user-Food. Guest dan ADMIN tidak dapat menulis rating. | Implemented; API/database integration lulus |
 | U-03 | `firstUsedAt` diisi sekali secara atomik pada rating pertama dan tidak berubah pada update rating. | Implemented; integration lulus |
 | U-04 | USER melihat riwayat rating sendiri di `/my-ratings`; tidak dapat membaca rating milik USER lain. | Implemented; owner-only integration lulus |
+| U-05 | USER melihat rekomendasi batch PUBLISHED miliknya sendiri; rekomendasi yang sudah dinilai dan Food nonaktif disembunyikan. | Implemented; owner/filter integration Tested |
 
 ### Admin
 
@@ -65,7 +66,8 @@ Pengguna membutuhkan cara menemukan makanan sesuai preferensi, sementara pola ra
 | AD-03 | Food Management list, server search/filter/sort/pagination, create/edit, image upload, activate/deactivate, history-aware permanent delete. | Implemented; PostgreSQL integration lulus |
 | AD-04 | CSV katalog dengan template, validation preview, row errors, insert-only commit atomik dan FoodImport history. | Implemented; PostgreSQL integration lulus |
 | AD-05 | Ekspor snapshot dataset rating tanpa PII untuk Altair, dengan checksum dan download ADMIN-only. | Implemented; PostgreSQL integration lulus |
-| AD-06 | Manual Altair processing, result import/validation/publication. | Planned |
+| AD-06 | ADMIN mengimpor hasil CSV dengan dataset sumber dan k/Top-N; validasi all-or-nothing, preview, error row, stale warnings, checksum, dan report. | Implemented; parser/API integration Tested |
+| AD-07 | Publish batch tervalidasi secara atomic; batch lama SUPERSEDED, publisher dan waktu tersimpan, history dapat ditinjau. | Implemented; PostgreSQL concurrent publication Tested |
 
 ## 6. User Flows
 
@@ -85,9 +87,9 @@ Pengguna mengirim aksi logout → Better Auth mencabut session dan cookie → re
 
 Guest/USER membuka `/foods` → hanya Food aktif ditampilkan → USER memilih rating integer 1–5 → server mengunci Food row, upsert `(userId,foodId)`, dan mengisi `firstUsedAt` sekali dalam transaction. USER melihat/memperbarui rating pribadi di `/my-ratings`; Food nonaktif tetap terlihat dalam history tetapi tidak dapat dinilai lagi.
 
-### Penerimaan rekomendasi — Planned
+### Penerimaan rekomendasi — Implemented
 
-Setelah batch hasil Altair tervalidasi dan dipublikasikan, USER akan melihat hasil batch aktif. Backend tidak menghitung UBCF.
+Setelah batch hasil Altair tervalidasi dan dipublikasikan, USER melihat hasil miliknya di `/recommendations`. Endpoint mengambil identity dari session, mengecualikan hasil yang kini telah dinilai dan Food nonaktif. Backend tidak menghitung UBCF.
 
 ## 7. Admin Flows
 
@@ -97,31 +99,32 @@ Dashboard admin, Food Management, dan dataset rating **Implemented**:
 2. **Import katalog:** ADMIN unduh template → unggah CSV → server validasi format dan setiap baris → preview → ADMIN commit → seluruh record baru tersimpan satu transaksi dan `FoodImport` mencatat hasil. Existing Food Code tidak diubah. Invalid file tidak dapat di-commit.
 3. **Ekspor dataset rating:** ADMIN membuka `/admin/ratings` → membuat snapshot → CSV `user_id,food_id,rating` dibuat dari satu query snapshot → metadata/checksum disimpan di `DatasetExport` → ADMIN mengunduh file privat melalui endpoint terproteksi. Email/nama tidak diekspor.
 
-Alur berikut **Planned**:
+Alur berikut **Implemented**:
 
-4. **Altair manual:** ADMIN memuat CSV di Altair AI Studio Educational 2026.1.1, menjalankan workflow UBCF/Cosine, lalu ekspor hasil. Tidak ada integrasi/API Altair.
-5. **Impor/validasi hasil:** hasil CSV menjadi draft `RecommendationBatch`; referensi, skor/rank dan duplikasi diperiksa; invalid batch tidak dapat dipublikasikan.
-6. **Publikasi:** ADMIN memublikasikan batch tervalidasi secara konsisten; batch lama disimpan dan ditandai SUPERSEDED.
+4. **Altair manual:** ADMIN memuat CSV di Altair AI Studio Educational 2026.1.1, menjalankan UBCF/Cosine/user k-NN, lalu ekspor hasil. Tidak ada integrasi/API Altair; kesesuaian file real **Pending Validation**.
+5. **Impor/validasi hasil:** ADMIN memilih DatasetExport sumber, mengisi parameter pemrosesan, dan mengunggah `user_id,item_id,rank`. Server memverifikasi checksum/snapshot sumber, user/Food ID, rank, duplikasi, Top-N, rating sumber, status Food, dan staleness. Error struktural/referensial menyimpan DRAFT tanpa Recommendation rows.
+6. **Publikasi:** ADMIN meninjau report dan preview lalu konfirmasi. Server revalidasi dalam transaction; lock + partial unique index memastikan maksimal satu batch PUBLISHED. Batch aktif lama menjadi SUPERSEDED, tidak dihapus.
+7. **Hasil personal:** `/api/me/recommendations` memakai user dari session. `/recommendations` menampilkan rank dan link Food detail; hasil nonaktif/sudah dinilai disaring.
 
 ## 8. Recommendation System
 
 - Metode penelitian: **User-Based Collaborative Filtering (UBCF)**.
 - Similarity: **Cosine Similarity**, `sim(u,v) = (r_u · r_v) / (||r_u|| × ||r_v||)`, dihitung pada item yang sama-sama dinilai sesuai workflow final.
 - Mesin utama: **Altair AI Studio Educational 2026.1.1**, proses manual administrator.
-- Website menyimpan rating dan snapshot export; batch/recommendation result ditambahkan pada fase berikutnya. Website **tidak** menjalankan algoritma.
+- Website menyimpan rating, snapshot export, parameter, result CSV checksum, validation report, Recommendation rows, status publish, dan riwayat. Website **tidak** menjalankan algoritma.
 - Minimum overlap, centering/normalisasi rating, rumus prediksi, tie-break, cold-start, `kNeighbors`, `topN`, score scale dan evaluasi **Pending Validation**.
 
 ## 9. CSV Integration
 
-Kontrak CSV katalog dan ekspor rating **Implemented**; CSV hasil rekomendasi **Planned**. Kompatibilitas Altair **Pending Validation**. Format memakai UTF-8/BOM, header berurutan dan wajib, comma delimiter, quoted fields RFC 4180. Food import dibatasi 2 MB/1.000 baris; ukuran export rating mengikuti jumlah rating.
+Kontrak CSV katalog, rating, dan rekomendasi **Implemented**. Kompatibilitas Altair **Pending Validation**. Format memakai UTF-8/BOM, header berurutan, comma delimiter, quoted fields RFC 4180. Food import dibatasi 2 MB/1.000 baris; result import 2 MB/10.000 baris; ekspor rating mengikuti jumlah rating.
 
 | CSV | Header usulan | Validasi usulan |
 | --- | --- | --- |
 | Katalog makanan | `food_code,name,description,category,taste,origin,protein_type,price_category,meal_time,texture,health_level,diet_category` | **Implemented:** header UTF-8 strict; kode/nama/kategori/rasa/asal wajib; enum/length tervalidasi; duplicate Food Code di file/DB ditolak; tidak ada update existing; row errors dilaporkan; commit all-or-nothing. Foto ditambahkan melalui form edit. Maksimum 2 MB/1.000 baris. |
 | Dataset rating | `user_id,food_id,rating` | **Implemented:** numeric stable ID, rating integer 1–5, unique user-food; tanpa email/nama/password/hash; snapshot checksum dan file privat immutable. |
-| Hasil rekomendasi | `user_id,item_id,rank` | `item_id` memetakan Food; FK valid; rank integer positif dan unik per user-batch; tidak rekomendasikan pasangan invalid/duplikat; batch/checksum dicatat. |
+| Hasil rekomendasi | `user_id,item_id,rank` | **Implemented:** exact header; positive integer IDs; User ada dan masuk snapshot; `item_id` memetakan `Food.id`; Food aktif; pasangan user-food tidak ada pada snapshot; rank mulai 1/berurutan/unik; jumlah per user ≤ Top-N; CSV checksum dan full row errors dicatat. Stale snapshot dan kandidat yang baru dinilai menjadi warning. |
 
-Food CSV template/preview/atomic import dan rating CSV snapshot/checksum/download **Implemented**. Food filename dibatasi 255 karakter. Kontrak result CSV, score format, dan Altair compatibility **Pending Validation**.
+Food CSV template/preview/atomic import dan rating CSV snapshot/checksum/download **Implemented**. Result CSV contract `user_id,item_id,rank` **Implemented**; tidak ada score/similarity score pada format. Altair real-file compatibility **Pending Validation**.
 
 ## 10. Database Requirements
 
@@ -132,8 +135,8 @@ Food CSV template/preview/atomic import dan rating CSV snapshot/checksum/downloa
 | Rating | Preferensi explicit USER. | FK User/Food, unique user-food, CHECK integer 1–5, index kedua FK. `firstUsedAt` diisi atomik saat rating pertama. | Implemented; API/UI/history tersedia |
 | FoodImport | Audit import katalog. | FK admin restrictive, checksum, row counts, VALIDATED/PROCESSING/COMPLETED/FAILED, private staging key. | Implemented; preview/atomic commit tersedia |
 | DatasetExport | Metadata snapshot CSV rating. | FK admin restrictive, count/checksum/private path, immutable trigger. | Implemented; ADMIN export/download tersedia |
-| RecommendationBatch | Status dan parameter hasil Altair. | FK DatasetExport/Admin restrictive, status DRAFT/VALIDATED/PUBLISHED/SUPERSEDED, k/topN positif. | Implemented (schema only) |
-| Recommendation | Rank result. | FK batch/user/food restrictive; unique batch-user-food dan batch-user-rank; rank positif. | Implemented (schema only) |
+| RecommendationBatch | Result CSV, sumber snapshot, importer/publisher, parameter, status, validasi. | FK restrictive; metadata validasi JSON; check publisher/waktu saat publish; maksimal satu PUBLISHED melalui partial unique index + transaction lock. | Implemented; publication concurrency Tested |
+| Recommendation | Rank result per batch/user/food. | FK restrictive; unique batch-user-food dan batch-user-rank; rank positif; tanpa cascade. | Implemented; owner/filter Tested |
 
 Better Auth memerlukan tabel teknis Session, Account, Verification. Session/Account boleh cascade saat User dihapus; relasi penelitian memakai RESTRICT. Snapshot/history tidak boleh terhapus tanpa sengaja. FoodImport staging key menyimpan identifier file privat, bukan path absolut yang dikirim ke client. Fase 3 migration/constraints telah diuji pada PostgreSQL `_test`; deployment DB **Pending Validation**.
 
@@ -142,9 +145,8 @@ Better Auth memerlukan tabel teknis Session, Account, Verification. Session/Acco
 - Modern Food App, bersih, hangat, food-focused; background putih dan section cream.
 - Token: Primary `#F97316`, hover `#EA580C`, soft `#FFF7ED`, green `#14532D`, white `#FFFFFF`, text `#111827`, secondary `#6B7280`, border `#E5E7EB`.
 - Font Plus Jakarta Sans via Next font optimization; Lucide icons; rounded cards 12–16px; focus/hover/disabled/error/loading.
-- Public navigation mengaktifkan Home dan Jelajahi Makanan; Rating Saya tersedia setelah USER login. Recommendation tetap disabled “Segera hadir”. Admin sidebar desktop/mobile mengaktifkan Kelola Makanan dan Data Rating; Recommendation tetap nonaktif.
-- Halaman yang tersedia: `/`, `/login`, `/register`, `/foods`, `/my-ratings`, `/admin`, not-found dan error. `/my-ratings` USER-only; `/admin` ADMIN-only.
-- Admin pages: `/admin/foods`, `/admin/foods/new`, `/admin/foods/[id]/edit`, `/admin/foods/import`, `/admin/ratings`; Data Rating aktif, recommendation menu tetap nonaktif.
+- Public navigation mengaktifkan Home, Jelajahi Makanan, Rating Saya, dan Rekomendasi. Admin sidebar desktop/mobile mengaktifkan Kelola Makanan, Data Rating, dan Pemrosesan Rekomendasi.
+- Halaman yang tersedia mencakup `/foods/[id]` dan USER-only `/recommendations`; admin pages mencakup `/admin/recommendations` dan detail `/admin/recommendations/[id]`.
 - Image preview menggunakan image tersimpan atau file terpilih; placeholder dipakai bila tidak ada foto. Tidak ada rating/statistik/rekomendasi dummy. Manual viewport/accessibility review **Pending Validation**.
 
 ## 12. Non-Functional Requirements
@@ -166,7 +168,7 @@ Better Auth memerlukan tabel teknis Session, Account, Verification. Session/Acco
 4. `foodCode` tidak berubah setelah insert; metadata snapshot export tidak berubah. **Implemented di migration; foodCode trigger diuji**.
 5. USER memberi rating integer 1–5; upsert memperbarui pasangan user-food yang sama dan menandai `firstUsedAt` atomik. **Implemented**.
 6. Makanan tanpa `firstUsedAt`, rating, atau recommendation reference boleh hard-delete. Makanan dengan histori hanya dapat dinonaktifkan/diaktifkan; FK database menjadi lapisan terakhir. **Implemented**.
-7. Altair dikerjakan manual; hasil tidak tampil sebelum validasi/publikasi batch. **Planned**.
+7. Altair dikerjakan manual; hasil tidak tampil sebelum validasi/publikasi batch. **Implemented**; file Altair real **Pending Validation**.
 8. Import katalog insert-only; jika satu baris invalid, tidak ada record makanan yang disimpan. **Implemented; concurrent commit diuji**.
 9. Food Code immutable setelah insert. Makanan import dibuat ACTIVE dan tidak mengubah item existing. **Implemented**.
 
@@ -178,9 +180,9 @@ Better Auth memerlukan tabel teknis Session, Account, Verification. Session/Acco
 | 2. Database Foundation, Authentication & Authorization | PostgreSQL, tujuh model domain, Better Auth, roles, seed, protected dashboard. | Implemented; isolated PostgreSQL integration lulus; production DB Pending Validation | F1 |
 | 3. Food Management | Admin list/search/filter/sort/pagination, CRUD, image upload, hybrid delete/reactivate, CSV template/preview/insert-only import, 40 food seed. | Implemented; PostgreSQL integration lulus | F2 |
 | 4. Rating workflows & data exchange | Public catalog, rating 1–5/history, Admin snapshot CSV `user_id,food_id,rating`. | Implemented; PostgreSQL integration lulus | F3 |
-| 5. Altair workflow | Manual UBCF/Cosine process dan result CSV import. | Planned; parameters Pending Validation | F4 |
-| 6. Validation and audit | Result checks, import report, batch lifecycle/audit. | Planned | F5 |
-| 7. Recommendation publication | Atomic publish and user recommendation UI. | Planned | F6 |
+| 5. Altair workflow | Manual UBCF/Cosine/user k-NN process; exchange rating/result CSV. | Workflow contract implemented; Altair real-file compatibility Pending Validation | F4 |
+| 6. Validation and audit | Result checks, import report, stale warnings, batch lifecycle/audit. | Implemented; parser/API/PostgreSQL integration Tested | F5 |
+| 7. Recommendation publication | Atomic publish, batch history, private user recommendation UI. | Implemented; concurrent PostgreSQL integration Tested | F6 |
 | 8. Hardening/release | Security, accessibility, load, operations and deployment. | Planned | F1–F7 |
 
 ## 15. Acceptance Criteria
@@ -198,7 +200,9 @@ Better Auth memerlukan tabel teknis Session, Account, Verification. Session/Acco
 | CSV food import F3 | Strict parser, UTF-8/template/preview, duplicate checks, no partial commit, concurrent/idempotent commit, audit history. | PostgreSQL integration lulus |
 | Rating F4 | Guest tidak bisa menulis; USER create/update 1–5; unique user-food; inactive food ditolak; firstUsedAt ditandai; history privat tersedia. | PostgreSQL integration lulus |
 | Rating export F4 | Admin membuat snapshot stabil, CSV berisi ID/rating saja, checksum/file privat, akses download admin-only. | PostgreSQL integration lulus |
-| F5–F8 | Acceptance sesuai roadmap masing-masing setelah implementasi. | Planned |
+| F5 | Manual Altair result CSV contract and compatibility with actual research export. | Pending Validation |
+| F6–F7 | Validation, history, atomic publish, owner-only page/filter. | Implemented; automated/integration Tested; visual and real Altair dataset Pending Validation |
+| F8 | Production hardening, accessibility, performance and operations. | Planned |
 
 ## 16. Open Questions & Risks
 

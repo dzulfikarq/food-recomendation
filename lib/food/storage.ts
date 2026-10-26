@@ -29,6 +29,10 @@ function ratingExportDirectory() {
   return path.join(storageRoot(), "rating-exports");
 }
 
+function recommendationImportDirectory() {
+  return path.join(storageRoot(), "recommendation-imports");
+}
+
 function inspectImage(buffer: Buffer): { mime: string; extension: string } | null {
   if (buffer.length >= 3 && buffer.subarray(0, 3).equals(jpegSignature)) return { mime: "image/jpeg", extension: ".jpg" };
   if (buffer.length >= 8 && buffer.subarray(0, 8).equals(pngSignature)) return { mime: "image/png", extension: ".png" };
@@ -131,6 +135,33 @@ export async function readRatingExport(key: string) {
 export async function removeRatingExport(key: string) {
   try {
     await unlink(path.join(ratingExportDirectory(), ratingExportKey(key)));
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+  }
+}
+
+function recommendationImportName(key: string) {
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\.csv$/.test(key)) {
+    throw new Error("Invalid recommendation import key.");
+  }
+  return key;
+}
+
+export async function saveRecommendationImport(buffer: Buffer) {
+  const key = `${randomUUID()}.csv`;
+  const directory = recommendationImportDirectory();
+  await mkdir(directory, { recursive: true });
+  await writeFile(path.join(directory, key), buffer, { flag: "wx" });
+  return key;
+}
+
+export async function readRecommendationImport(key: string) {
+  return readFile(path.join(recommendationImportDirectory(), recommendationImportName(key)));
+}
+
+export async function removeRecommendationImport(key: string) {
+  try {
+    await unlink(path.join(recommendationImportDirectory(), recommendationImportName(key)));
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
   }

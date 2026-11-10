@@ -16,6 +16,12 @@ test("recommendation CSV rejects extra/wrong headers and invalid positive intege
   assert.deepEqual(result.errors.map(({ row, field }) => [row, field]), [[2, "user_id"], [3, "item_id"], [4, "rank"]]);
 });
 
+test("recommendation CSV cannot be empty", () => {
+  const result = parseRecommendationCsv(Buffer.from("user_id,item_id,rank\n"), 2);
+  assert.equal(result.rows.length, 0);
+  assert.ok(result.errors.some(({ message }) => message.includes("setidaknya satu baris rekomendasi")));
+});
+
 test("recommendation CSV rejects duplicate pairs, duplicate ranks, gaps, and rows above Top-N", () => {
   const duplicate = parseRecommendationCsv(Buffer.from("user_id,item_id,rank\n1,10,1\n1,10,1\n"), 2);
   assert.ok(duplicate.errors.some(({ field, message }) => field === "item_id" && message.includes("duplikat")));

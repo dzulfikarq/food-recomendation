@@ -29,6 +29,7 @@ export default async function FoodManagementPage({ searchParams }: { searchParam
   const query = parsed.success ? parsed.data : foodListQuerySchema.parse({});
   const { foods, pagination, filters } = await listFoods(query);
   const notice = params.get("notice");
+  const filtersApplied = Boolean(filters.search || filters.status !== "all" || filters.category);
 
   function pageHref(page: number) {
     const next = new URLSearchParams();
@@ -62,7 +63,7 @@ export default async function FoodManagementPage({ searchParams }: { searchParam
 
       {foods.length === 0 ? (
         <Card className="grid min-h-72 place-items-center p-8 text-center">
-          <div><span className="mx-auto grid size-14 place-items-center rounded-2xl bg-soft text-primary"><ImageIcon size={25} aria-hidden="true" /></span><h2 className="mb-0 mt-4 text-lg font-bold text-gray-950">Belum ada makanan</h2><p className="mb-0 mt-2 max-w-sm text-sm leading-6 text-secondary">Tambahkan makanan pertama atau jalankan seed katalog awal.</p><ButtonLink href="/admin/foods/new" className="mt-5"><CirclePlus size={16} aria-hidden="true" /> Tambah Makanan</ButtonLink></div>
+          <div><span className="mx-auto grid size-14 place-items-center rounded-2xl bg-soft text-primary"><ImageIcon size={25} aria-hidden="true" /></span><h2 className="mb-0 mt-4 text-lg font-bold text-gray-950">{filtersApplied ? "Tidak ada makanan yang cocok" : "Katalog makanan masih kosong"}</h2><p className="mb-0 mt-2 max-w-sm text-sm leading-6 text-secondary">{filtersApplied ? "Ubah kata pencarian atau filter untuk melihat makanan lain." : "Tambahkan makanan pertama agar katalog tersedia untuk pengguna."}</p>{filtersApplied ? <Link href="/admin/foods" className="mt-5 inline-flex min-h-10 items-center font-semibold text-primary hover:underline">Hapus filter</Link> : <ButtonLink href="/admin/foods/new" className="mt-5"><CirclePlus size={16} aria-hidden="true" /> Tambah Makanan</ButtonLink>}</div>
         </Card>
       ) : (
         <Card className="overflow-hidden">

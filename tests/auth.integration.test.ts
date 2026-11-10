@@ -74,7 +74,7 @@ test("PostgreSQL registration, login, logout, role guards, and database constrai
     registrationData.set("role", "ADMIN");
     const invalidRegistration = await post("/register", registrationData);
     assert.equal(invalidRegistration.status, 200);
-    assert.match(await invalidRegistration.text(), /Passwords do not match/);
+    assert.match(await invalidRegistration.text(), /Konfirmasi password tidak cocok/);
     assert.equal(await prisma.user.findUnique({ where: { email } }), null);
 
     const validRegistration = await actionForm("/register");
@@ -124,7 +124,7 @@ test("PostgreSQL registration, login, logout, role guards, and database constrai
     invalidLoginForm.set("password", "incorrect-password");
     const invalidLogin = await post("/login", invalidLoginForm);
     assert.equal(invalidLogin.status, 200);
-    assert.match(await invalidLogin.text(), /Email or password is incorrect/);
+    assert.match(await invalidLogin.text(), /Email atau password salah/);
 
     const adminLoginForm = await actionForm("/login");
     adminLoginForm.set("email", env.ADMIN_EMAIL ?? "");
@@ -135,7 +135,10 @@ test("PostgreSQL registration, login, logout, role guards, and database constrai
     assert.match(adminCookie, /session_token/);
     const adminPage = await page("/admin", adminCookie);
     assert.equal(adminPage.status, 200);
-    assert.match(await adminPage.text(), /Administrator/);
+    const adminHtml = await adminPage.text();
+    assert.match(adminHtml, /Administrator/);
+    for (const label of ["Makanan aktif", "Pengguna dengan rating", "Total rating", "Dataset ekspor", "Batch aktif", "Publikasi terakhir", "Batch rekomendasi terakhir", "Aksi berikutnya"]) assert.match(adminHtml, new RegExp(label));
+    assert.doesNotMatch(adminHtml, /Segera hadir|direncanakan pada fase berikutnya/);
     assert.equal((await page("/login", adminCookie)).status, 307);
 
     const adminLogoutForm = await actionForm("/", adminCookie);

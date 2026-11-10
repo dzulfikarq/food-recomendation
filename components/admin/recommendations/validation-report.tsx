@@ -21,7 +21,7 @@ export function RecommendationValidationReportView({ report }: { report: Recomme
 
       {report.warnings.map((warning) => <Alert key={warning.code} variant="info">{warning.message}</Alert>)}
       {report.errors.length > 0 && <Card className="overflow-hidden border-red-200">
-        <div className="border-b border-red-100 bg-red-50 px-4 py-3"><h3 className="m-0 text-sm font-bold text-red-900">Laporan validasi · {report.errors.length} kesalahan</h3></div>
+        <div className="border-b border-red-100 bg-red-50 px-4 py-3"><h3 className="m-0 text-sm font-bold text-red-900">Laporan validasi · {report.errors.length} kesalahan</h3><p className="mb-0 mt-1 text-xs leading-5 text-red-800">Perbaiki baris atau kolom yang disebutkan, ekspor ulang CSV, lalu impor kembali pada tahap 3. Batch ini belum dapat diterbitkan.</p></div>
         <div className="max-h-72 overflow-auto"><table className="w-full min-w-[540px] text-left text-sm"><thead className="sticky top-0 bg-white text-xs uppercase text-gray-500"><tr><th className="px-4 py-2">Baris</th><th className="px-4 py-2">Kolom</th><th className="px-4 py-2">Alasan</th></tr></thead><tbody className="divide-y divide-border">{report.errors.map((error, index) => <tr key={`${error.row}-${error.field ?? ""}-${index}`}><td className="px-4 py-2 font-mono">{error.row || "—"}</td><td className="px-4 py-2">{error.field ?? "CSV"}</td><td className="px-4 py-2">{error.message}</td></tr>)}</tbody></table></div>
       </Card>}
 

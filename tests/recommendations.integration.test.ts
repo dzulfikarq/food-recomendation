@@ -68,13 +68,26 @@ test("recommendation import validation, private user results, and concurrent ato
     const userB = await createLogin("Recommendation User B", "USER");
     const userC = await createLogin("Recommendation User C", "USER");
     assert.equal((await page("/recommendations")).status, 307);
-    assert.equal((await page("/admin/recommendations", adminCookie)).status, 200);
+    const workflow = await page("/admin/recommendations", adminCookie);
+    assert.equal(workflow.status, 200);
+    const workflowHtml = await workflow.text();
+    assert.match(workflowHtml, /Siapkan Dataset/);
+    assert.match(workflowHtml, /Proses di Altair/);
+    assert.match(workflowHtml, /Impor dan Validasi/);
+    assert.match(workflowHtml, /Tinjau dan Publikasikan/);
     assert.equal((await api("/api/admin/recommendation-batches", "GET", undefined, userA.cookie)).status, 403);
     assert.equal((await api("/api/admin/recommendation-batches/import", "POST", new FormData(), userA.cookie)).status, 403);
     assert.equal((await api("/api/me/recommendations", "GET", undefined, adminCookie)).status, 403);
     const noRatings = await api("/api/me/recommendations", "GET", undefined, userA.cookie);
     assert.equal(noRatings.status, 200);
     assert.equal((await noRatings.json()).data.status, "NO_RATINGS");
+    const onboarding = await page("/", userA.cookie);
+    assert.equal(onboarding.status, 200);
+    const onboardingHtml = await onboarding.text();
+    assert.match(onboardingHtml, /RUANG SELERA KAMU/);
+    assert.match(onboardingHtml, /Mulai dari makanan yang kamu kenal/);
+    assert.match(onboardingHtml, /Recommendation User A/);
+    assert.match(onboardingHtml, /Jelajahi makanan/);
 
     const sourceFoodA = await createFood("Snapshot Food A");
     const sourceFoodB = await createFood("Snapshot Food B");
@@ -106,6 +119,13 @@ test("recommendation import validation, private user results, and concurrent ato
     const badHeader = await upload(datasetExportId, `user_id,food_id,rank\n${userA.id},${userAFood},1\n`, adminCookie, 3, 1);
     assert.equal(badHeader.status, 422);
 
+    const emptyImport = await upload(datasetExportId, "user_id,item_id,rank\n", adminCookie);
+    assert.equal(emptyImport.status, 422);
+    const emptyBatch = (await emptyImport.json()).data;
+    assert.equal(emptyBatch.status, "DRAFT");
+    assert.match(emptyBatch.report.errors[0].message, /setidaknya satu baris rekomendasi/);
+    assert.equal((await api(`/api/admin/recommendation-batches/${emptyBatch.batchId}/publish`, "POST", {}, adminCookie)).status, 409);
+
     const validCsv = `user_id,item_id,rank\n${userA.id},${newlyRatedFood},1\n${userA.id},${userAFood},2\n${userB.id},${userBFood},1\n`;
     const imported = await upload(datasetExportId, validCsv, adminCookie);
     assert.equal(imported.status, 201, await imported.clone().text());
@@ -119,6 +139,12 @@ test("recommendation import validation, private user results, and concurrent ato
     assert.equal(importedData.report.summary.ratedAfterExportCount, 1);
     assert.equal(await prisma.recommendationBatch.count({ where: { id: batchId, status: "PUBLISHED" } }), 0);
     assert.equal((await api(`/api/admin/recommendation-batches/${batchId}/publish`, "POST", {}, userA.cookie)).status, 403);
+    const filteredHistory = await page(`/admin/recommendations?status=VALIDATED&search=${encodeURIComponent("recommendations.csv")}`, adminCookie);
+    assert.equal(filteredHistory.status, 200);
+    const filteredHistoryHtml = await filteredHistory.text();
+    assert.match(filteredHistoryHtml, new RegExp(`#(?:<!-- -->)?${batchId}`), "status and filename filters should keep matching batch visible");
+    assert.ok(filteredHistoryHtml.includes("recommendations.csv"));
+    assert.ok(filteredHistoryHtml.includes("Tervalidasi"));
 
     const list = await api("/api/admin/recommendation-batches?page=1&pageSize=10", "GET", undefined, adminCookie);
     assert.equal(list.status, 200);
@@ -162,7 +188,9 @@ test("recommendation import validation, private user results, and concurrent ato
     assert.equal(userAData.status, "READY");
     assert.deepEqual(userAData.recommendations.map((row: { food: { id: number } }) => row.food.id), [userAFood]);
     assert.equal(userAData.recommendations[0].rank, 2);
-    assert.equal((await page("/recommendations", userA.cookie)).status, 200);
+    const recommendationsPage = await page("/recommendations", userA.cookie);
+    assert.equal(recommendationsPage.status, 200);
+    assert.match(await recommendationsPage.text(), /Rekomendasi Untukmu/);
     assert.equal((await page(`/foods/${userAFood}`, userA.cookie)).status, 200);
 
     const userBData = (await (await api("/api/me/recommendations", "GET", undefined, userB.cookie)).json()).data;

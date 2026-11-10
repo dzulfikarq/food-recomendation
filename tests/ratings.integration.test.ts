@@ -58,6 +58,11 @@ test("USER rating lifecycle, private rating history, and ADMIN dataset CSV snaps
     } });
     foodId = food.id;
     const baselineRatingCount = await prisma.rating.count();
+    const catalogBefore = await page(`/foods?search=${encodeURIComponent(food.foodCode)}`, userCookie);
+    assert.equal(catalogBefore.status, 200);
+    const catalogBeforeHtml = await catalogBefore.text();
+    assert.match(catalogBeforeHtml, /0 dari \d+ makanan aktif dinilai/);
+    assert.match(catalogBeforeHtml, /1 Tidak suka · 2 Kurang suka · 3 Biasa saja · 4 Suka · 5 Sangat suka/);
     const foodList = await api(`/api/foods?search=${encodeURIComponent(food.foodCode)}`);
     assert.equal(foodList.status, 200);
     const foodPayload = await foodList.json();
@@ -79,12 +84,20 @@ test("USER rating lifecycle, private rating history, and ADMIN dataset CSV snaps
     assert.equal(await prisma.rating.count({ where: { userId, foodId: food.id } }), 1);
     assert.equal((await prisma.rating.findFirstOrThrow({ where: { userId, foodId: food.id } })).rating, 3);
     assert.equal((await prisma.food.findUniqueOrThrow({ where: { id: food.id } })).firstUsedAt?.getTime(), firstUsedAt.getTime());
+    const catalogAfter = await page(`/foods?search=${encodeURIComponent(food.foodCode)}`, userCookie);
+    assert.match(await catalogAfter.text(), /1 dari \d+ makanan aktif dinilai/);
+    const home = await page("/", userCookie);
+    assert.match(await home.text(), /Cari yang belum dinilai/);
 
     const history = await api("/api/my-ratings", "GET", undefined, userCookie);
     assert.equal(history.status, 200);
     assert.equal((await history.json()).data.ratings[0].rating, 3);
     assert.equal((await page("/my-ratings", userCookie)).status, 200);
-    assert.match(await (await page("/my-ratings", userCookie)).text(), /Rating Integration User|Rating Saya|Nasi Goreng/);
+    const historyPage = await page("/my-ratings", userCookie);
+    const historyHtml = await historyPage.text();
+    assert.match(historyHtml, /Rating Integration User|Rating Saya|Nasi Goreng/);
+    assert.match(historyHtml, /Rata-rata[\s\S]{0,100}3,0/);
+    assert.match(historyHtml, /Kembali ke katalog/);
 
     const adminLogin = await api("/api/auth/sign-in/email", "POST", { email: env.ADMIN_EMAIL, password: env.ADMIN_PASSWORD });
     assert.equal(adminLogin.status, 200);
@@ -99,6 +112,13 @@ test("USER rating lifecycle, private rating history, and ADMIN dataset CSV snaps
     const datasetExport = (await exportResponse.json()).data;
     assert.equal(datasetExport.rowCount, baselineRatingCount + 1);
     assert.equal("filePath" in datasetExport, false);
+    const filteredSnapshots = await page(`/admin/ratings?search=${encodeURIComponent(datasetExport.filename)}&page=999999`, adminCookie);
+    assert.equal(filteredSnapshots.status, 200);
+    const filteredSnapshotsHtml = await filteredSnapshots.text();
+    assert.match(filteredSnapshotsHtml, new RegExp(`#(?:<!-- -->)?${datasetExport.id}`), "search by snapshot filename should keep matching snapshot visible");
+    assert.ok(filteredSnapshotsHtml.includes(datasetExport.filename));
+    const missingSnapshots = await page("/admin/ratings?search=no-such-snapshot.csv", adminCookie);
+    assert.match(await missingSnapshots.text(), /Tidak ada snapshot yang cocok/);
     const download = await api(`/api/admin/rating-datasets/${datasetExport.id}/download`, "GET", undefined, adminCookie);
     assert.equal(download.status, 200);
     const csv = await download.text();

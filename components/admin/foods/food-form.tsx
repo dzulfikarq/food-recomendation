@@ -124,7 +124,7 @@ export function FoodForm({ mode, food }: Props) {
       </Card>
 
       <Card className="p-5 sm:p-7">
-        <div className="mb-6"><h2 className="m-0 text-lg font-bold text-gray-950">Karakteristik makanan</h2><p className="mb-0 mt-1 text-sm text-secondary">Informasi opsional untuk katalog dan dataset fase mendatang.</p></div>
+        <div className="mb-6"><h2 className="m-0 text-lg font-bold text-gray-950">Karakteristik makanan</h2><p className="mb-0 mt-1 text-sm text-secondary">Informasi tambahan untuk membantu pengguna memahami makanan dan mendukung dataset rekomendasi.</p></div>
         <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
           <SelectField id="protein-type" name="proteinType" label="Protein Type" defaultValue={food?.proteinType ?? ""}><option value="">Belum ditentukan</option>{FOOD_PROTEINS.map((value) => <option key={value} value={value}>{value}</option>)}</SelectField>
           <SelectField id="price-category" name="priceCategory" label="Price Category" defaultValue={food?.priceCategory ?? ""}><option value="">Belum ditentukan</option>{FOOD_PRICE_CATEGORIES.map((value) => <option key={value} value={value}>{value}</option>)}</SelectField>

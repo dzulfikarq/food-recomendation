@@ -5,8 +5,8 @@ FoodRec membantu pengguna menjelajahi makanan, menyimpan rating, dan melihat rek
 ## Status
 
 - **Implemented:** user journey personal, katalog/rating, halaman rekomendasi, dashboard admin operasional, dan workflow CSV terpandu sampai publikasi.
-- **FoodRec V2 Phase A:** pure Python Cosine, user k-NN, rating prediction, deterministic Top-N, fixture sintetis, dan 14 unit tests. Belum ada job queue/API/worker integration.
-- **Automatic processing:** OFF. Altair parity **Pending Validation** sampai dataset penelitian, operator configuration, dan reference output tersedia.
+- **FoodRec V2:** pure Python Cosine/user k-NN/prediction/Top-N; Phase B added package fixtures and regression tests. 43-rating result **MATCHED OUTPUT**; train-264 Top-1 **MISMATCH**. Python suite: 19 tests.
+- **Automatic processing:** OFF. Mathematical parity **Pending Validation**; screenshot transcription is not original Altair export, and 264 operator configuration/output scores are unavailable.
 - **Admin workflow:** statistik dari database, empat tahap Dataset → Altair manual → Import/Validasi → Publish, snapshot pilihan, filter/pencarian riwayat, detail checksum dan metadata.
 - **Automated checks lulus:** `npm run lint`, `npm run typecheck`, `npm test` (14 tes), `npm run build`, dan `npm run test:integration` (4 tes PostgreSQL). Integration memakai database `foodrec_test` terisolasi.
 - **Pending Validation:** round-trip dengan file hasil Altair penelitian sesungguhnya, production database/storage, security/performance production, serta review visual, keyboard, dan screen reader lintas perangkat.
@@ -67,7 +67,7 @@ npm run test:integration
 
 Script memerlukan production build, menerapkan migration dan seed pada database `_test`; tidak melakukan reset. Test menambah FoodImport/DatasetExport/RecommendationBatch audit records serta fixture user/food yang terikat histori; database `_test` harus terpisah dari DB development.
 
-Python unit tests memakai stdlib, tanpa runtime dependency tambahan:
+Python tests memakai stdlib, tanpa runtime dependency tambahan:
 
 ```powershell
 Set-Location services/recommender

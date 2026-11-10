@@ -7,7 +7,7 @@
 | Phase | Status | Notes |
 | --- | --- | --- |
 | A — Foundation and Python core | **Implemented; 14 unit tests pass; research fixture Pending Validation** | Pure functions, synthetic fixture, documented baseline. |
-| B — Altair validation | **Blocked: Pending Validation** | Research dataset, operator configuration, and reference output not found. No parity claim. |
+| B — Altair validation | **Output comparison complete; mathematical parity Pending Validation** | 43: MATCHED OUTPUT (5/5); train-264: MISMATCH (0/22 item IDs). Screenshot transcription and incomplete 264 workflow prevent parity claim. |
 | C — PostgreSQL jobs and authenticated worker API | Planned | No schema/API changes yet. |
 | D — Rating-triggered and scheduled processing | Planned; automatic processing OFF | Must wait for validation and integration gates. |
 | E — Admin/user automation UX | Planned | Existing manual CSV workflow remains unchanged. |

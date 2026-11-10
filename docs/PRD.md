@@ -4,7 +4,7 @@ Status fitur menggunakan **Implemented** (kode tersedia), **Tested** (automated/
 
 ## 1. Product Overview
 
-FoodRec adalah aplikasi web untuk menjelajahi makanan, menyimpan preferensi pengguna, dan menyajikan rekomendasi yang telah diterbitkan. Website menyimpan akun, katalog, rating, snapshot, batch, dan riwayat audit. User-Based Collaborative Filtering dengan Cosine Similarity diproses manual oleh administrator di **Altair AI Studio Educational 2026.1.1**; website menukar dataset dan hasil lewat CSV. Algoritma tidak dijalankan backend.
+FoodRec adalah aplikasi web untuk menjelajahi makanan, menyimpan preferensi pengguna, dan menyajikan rekomendasi yang telah diterbitkan. Website menyimpan akun, katalog, rating, snapshot, batch, dan riwayat audit. User-Based Collaborative Filtering dengan Cosine Similarity diproses manual oleh administrator di **Altair AI Studio Educational 2026.1.1**; website menukar dataset dan hasil lewat CSV. Python V2 core belum terhubung ke backend web.
 
 Implementasi mencakup foundation, autentikasi, Food Management, rating, snapshot CSV, validasi hasil Altair, manajemen batch, publikasi, dan halaman rekomendasi USER. Pemrosesan Altair tetap manual; kesesuaian dengan file penelitian asli dan review visual lintas perangkat masih perlu divalidasi.
 
@@ -14,7 +14,7 @@ Implementasi mencakup foundation, autentikasi, Food Management, rating, snapshot
 
 ## FoodRec V2 status
 
-Phase A menambahkan pure Python UBCF core di `services/recommender`; website belum memanggilnya dan belum ada worker, queue, atau internal API. Existing Altair CSV workflow remains active. Altair parity is **Pending Validation** because research dataset, operator settings, and reference output are unavailable. Automatic processing remains **OFF**. See [`RECOMMENDATION_ENGINE_VALIDATION.md`](RECOMMENDATION_ENGINE_VALIDATION.md).
+Python UBCF core and Phase B regression fixtures exist in `services/recommender`; website still has no worker, queue, or internal API. Existing Altair CSV workflow remains active. The 43-row screenshot transcription is **MATCHED OUTPUT**; train-264 Top-1 is **MISMATCH**. Mathematical parity is **Pending Validation** because transcriptions are not original exports and full 264 operator settings/scores are unavailable. Automatic processing remains **OFF**. See [`RECOMMENDATION_ENGINE_VALIDATION.md`](RECOMMENDATION_ENGINE_VALIDATION.md).
 
 ## 2. Problem Statement
 

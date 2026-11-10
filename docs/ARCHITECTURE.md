@@ -102,6 +102,6 @@ Initial migration memiliki FK restrictive untuk histori penelitian, check constr
 
 ## Recommendation boundary — V2 Phase A implemented; integration pending
 
-Existing web path tetap memakai Altair CSV import, validation, and atomic publication. Phase A menambahkan pure Python UBCF core di `services/recommender`, belum worker atau website integration. Baseline similarity/prediction assumptions dan synthetic fixture didokumentasikan di [`RECOMMENDATION_ENGINE_VALIDATION.md`](RECOMMENDATION_ENGINE_VALIDATION.md). Altair parity **Pending Validation** karena research dataset, operator configuration, dan reference output tidak ada di repository. Automatic processing tetap **OFF**.
+Existing web path tetap memakai Altair CSV import, validation, and atomic publication. Pure Python UBCF core and Phase B screenshot-transcription comparisons live in `services/recommender`; no worker or website integration yet. 43-rating output matches; train-264 Top-1 mismatches. Altair parity **Pending Validation** because reference CSVs are screenshot transcriptions, 264 workflow configuration is unconfirmed, and scores/neighbors are unavailable. Automatic processing tetap **OFF**.
 
 Next.js remains owner of authentication, authorization, PostgreSQL migrations, snapshots, validation, and publication. Python worker communication, durable jobs, and batch source metadata are deferred to later V2 phases; Python has no direct database ownership.

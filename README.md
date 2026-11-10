@@ -1,15 +1,16 @@
 # FoodRec
 
-FoodRec adalah aplikasi rekomendasi makanan berbasis pola rating. User-Based Collaborative Filtering dan Cosine Similarity kelak diproses manual di Altair AI Studio Educational 2026.1.1; backend tidak menjalankan algoritma rekomendasi.
+FoodRec membantu pengguna menjelajahi makanan, menyimpan rating, dan melihat rekomendasi yang sudah diterbitkan untuk akun mereka. Admin mengekspor snapshot rating, memproses User-Based Collaborative Filtering dan Cosine Similarity secara manual di Altair AI Studio Educational 2026.1.1, lalu mengimpor, memvalidasi, dan menerbitkan hasil CSV. Backend tidak menghitung algoritma rekomendasi.
 
 ## Status
 
-- **Implemented:** Fase 1–4, ADMIN recommendation CSV import/validation/preview/atomic publish, batch history, dan halaman rekomendasi privat USER.
-- **Tested:** CSV validation, owner-only query/filter, migration, API role guards, publication replacement/concurrency; lihat `yarn test` dan `npm run test:integration`.
-- **Pending Validation:** round-trip dengan file hasil Altair penelitian sesungguhnya, production database/storage, security/performance production, dan visual/accessibility review lintas perangkat.
+- **Implemented:** user journey personal, katalog/rating, halaman rekomendasi, dashboard admin operasional, dan workflow CSV terpandu sampai publikasi.
+- **Admin workflow:** statistik dari database, empat tahap Dataset → Altair manual → Import/Validasi → Publish, snapshot pilihan, filter/pencarian riwayat, detail checksum dan metadata.
+- **Automated checks lulus:** `npm run lint`, `npm run typecheck`, `npm test` (14 tes), `npm run build`, dan `npm run test:integration` (4 tes PostgreSQL). Integration memakai database `foodrec_test` terisolasi.
+- **Pending Validation:** round-trip dengan file hasil Altair penelitian sesungguhnya, production database/storage, security/performance production, serta review visual, keyboard, dan screen reader lintas perangkat.
 - **Manual:** UBCF, Cosine Similarity, dan user k-NN tetap dijalankan di Altair AI Studio Educational 2026.1.1; website tidak menghitung algoritme.
 
-Food Management dan Data Rating hanya untuk ADMIN (`/admin/foods`, `/admin/ratings`). USER dapat membuka `/foods`, memberi rating, dan melihat `/my-ratings`. Recommendation pages dan model backend **belum tersedia**. Detail: [`docs/ROADMAP.md`](docs/ROADMAP.md).
+Guest dapat melihat katalog aktif dan membuat akun. Setelah masuk, USER mendapat beranda personal, dapat menjelajahi `/foods`, memberi atau memperbarui rating 1–5, melihat `/my-ratings`, dan membuka `/recommendations`. Hasil hanya tampil setelah admin menerbitkan batch yang mencakup user; menyimpan rating tidak memicu pemrosesan otomatis. Dashboard admin dan pengelolaan katalog, snapshot, impor, validasi, publikasi, serta audit tersedia di `/admin`. Detail status dan batas validasi: [`docs/ROADMAP.md`](docs/ROADMAP.md).
 
 ## Prasyarat
 
@@ -48,9 +49,9 @@ Buka `http://localhost:3000`. `db:seed` membuat ADMIN hanya bila email belum ada
 ## Workflow rekomendasi
 
 1. ADMIN membuat dan mengunduh snapshot privat di `/admin/ratings` atau `/admin/recommendations`.
-2. ADMIN memproses snapshot manual di Altair AI Studio Educational 2026.1.1 (UBCF, Cosine Similarity, user k-NN), lalu mengekspor CSV ber-header `user_id,item_id,rank`. `item_id` harus memakai `Food.id`.
-3. Di `/admin/recommendations`, pilih DatasetExport sumber, isi k/Top-N yang benar-benar dipakai, unggah CSV, tinjau error/warning/preview, lalu konfirmasi **Terbitkan Rekomendasi**. Upload tidak otomatis aktif; invalid batch tidak menyimpan Recommendation rows.
-4. USER melihat hasil batch PUBLISHED miliknya di `/recommendations`. Food nonaktif dan rekomendasi yang sudah dinilai disembunyikan. Perubahan rating tidak menghitung ulang algoritme.
+2. ADMIN mengikuti panduan Altair manual (UBCF, Cosine Similarity, user k-NN), lalu mengekspor CSV ber-header `user_id,item_id,rank`. `item_id` harus memakai `Food.id`; website tidak menjalankan Altair.
+3. Di `/admin/recommendations`, pilih DatasetExport sumber, isi k/Top-N yang benar-benar dipakai, pilih CSV, tinjau nama/ukuran file, error/warning/preview, lalu konfirmasi **Terbitkan Rekomendasi**. Upload tidak otomatis aktif; batch kosong/invalid tidak dapat diterbitkan.
+4. USER melihat hasil batch PUBLISHED miliknya di `/recommendations`. Food nonaktif dan rekomendasi yang sudah dinilai disembunyikan. Perubahan rating tidak menghitung ulang algoritme dan tidak menjamin rekomendasi baru.
 
 CSV hasil maksimal 2 MB/10.000 baris, UTF-8, header wajib persis `user_id,item_id,rank`; ID dan rank integer positif, rank per user berurutan mulai 1 dan tidak melebihi Top-N. Integrasi file Altair penelitian sesungguhnya masih **Pending Validation**.
 
@@ -103,3 +104,4 @@ Validasi memakai PostgreSQL 17 terisolasi. Docker tidak tersedia di environment 
 - [`docs/DATABASE.md`](docs/DATABASE.md) — tujuh model inti dan tabel auth.
 - [`docs/ROADMAP.md`](docs/ROADMAP.md) — Fase 1–8.
 - [`docs/DECISIONS.md`](docs/DECISIONS.md) — keputusan dan batasan.
+- [`docs/DESIGN.md`](docs/DESIGN.md) — user flow, halaman, komponen, dan prinsip UX FoodRec.

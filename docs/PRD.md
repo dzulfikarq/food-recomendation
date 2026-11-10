@@ -4,9 +4,9 @@ Status fitur menggunakan **Implemented** (kode tersedia), **Tested** (automated/
 
 ## 1. Product Overview
 
-FoodRec adalah aplikasi web untuk membangun sistem rekomendasi makanan dari preferensi/rating pengguna. Website menyimpan akun, katalog, dan data penelitian. User-Based Collaborative Filtering dengan Cosine Similarity diproses manual oleh administrator di **Altair AI Studio Educational 2026.1.1**; website bertukar dataset dan hasil lewat CSV pada fase mendatang. Algoritma tidak dijalankan backend.
+FoodRec adalah aplikasi web untuk menjelajahi makanan, menyimpan preferensi pengguna, dan menyajikan rekomendasi yang telah diterbitkan. Website menyimpan akun, katalog, rating, snapshot, batch, dan riwayat audit. User-Based Collaborative Filtering dengan Cosine Similarity diproses manual oleh administrator di **Altair AI Studio Educational 2026.1.1**; website menukar dataset dan hasil lewat CSV. Algoritma tidak dijalankan backend.
 
-Fase 1–4 menyediakan foundation, autentikasi, Food Management, rating, dan snapshot CSV. Fase 6–7 menambahkan validasi hasil Altair, manajemen batch, publikasi, dan halaman rekomendasi USER. Pemrosesan Altair tetap manual.
+Implementasi mencakup foundation, autentikasi, Food Management, rating, snapshot CSV, validasi hasil Altair, manajemen batch, publikasi, dan halaman rekomendasi USER. Pemrosesan Altair tetap manual; kesesuaian dengan file penelitian asli dan review visual lintas perangkat masih perlu divalidasi.
 
 - **Implemented:** foundation/auth, Food Management, rating/export, recommendation import/validation/publish, batch history, dan halaman rekomendasi personal.
 - **Tested:** unit CSV checks dan PostgreSQL integration pada database `_test`; deployment database, storage, visual/accessibility, dan security/performance tetap terpisah.
@@ -14,13 +14,13 @@ Fase 1–4 menyediakan foundation, autentikasi, Food Management, rating, dan sna
 
 ## 2. Problem Statement
 
-Pengguna membutuhkan cara menemukan makanan sesuai preferensi, sementara pola rating dapat memberi sinyal preferensi kolektif. FoodRec kini menyediakan katalog aktif dan rating eksplisit; rekomendasi personal disiapkan untuk fase berikutnya dan pemrosesan CF tidak dijalankan backend.
+Pengguna membutuhkan cara menemukan makanan sesuai preferensi, sementara pola rating dapat memberi sinyal preferensi kolektif. FoodRec menyediakan katalog aktif dan rating eksplisit. Admin memproses dataset di Altair dan menerbitkan hasil; backend tidak menjalankan CF atau memperbarui hasil secara otomatis.
 
 ## 3. Product Goals
 
 1. Menyediakan fondasi aman dan responsif untuk akun Guest, USER, dan ADMIN.
 2. Menyimpan identitas numeric serta relasi data penelitian dengan integritas referensial.
-3. Mendukung workflow UBCF/Cosine Similarity manual via Altair dan CSV pada fase mendatang.
+3. Mendukung pertukaran dataset dan hasil CSV untuk workflow UBCF/Cosine Similarity manual via Altair.
 
 **Kriteria keberhasilan usulan — Pending Validation:** register → login → session persisten → logout; hanya ADMIN dapat membuka dashboard; tidak ada data penelitian yang hilang akibat cascade; target aktivasi, relevansi, dan performa ditetapkan setelah uji pengguna/dataset tersedia.
 
@@ -28,8 +28,8 @@ Pengguna membutuhkan cara menemukan makanan sesuai preferensi, sementara pola ra
 
 | Role | Hak akses | Status |
 | --- | --- | --- |
-| Guest | Membuka public home, register, login. Tidak dapat membuka `/admin` atau Food Management API. | **Implemented; integration test lulus**. |
-| USER | Home, katalog Food aktif, rating 1–5, riwayat rating, login/logout. Tidak dapat membuka `/admin`. Rekomendasi personal belum tersedia. | **Implemented; integration test lulus**. |
+| Guest | Membuka beranda dan katalog aktif; dapat daftar atau masuk. Tidak dapat memberi rating atau membuka `/admin`. | **Implemented**; route/auth integration coverage ada. |
+| USER | Beranda personal, katalog dan filter rating, rating 1–5, riwayat, serta rekomendasi batch terbit yang cocok dengan akun. Tidak dapat membuka `/admin`. | **Implemented**; owner/filter integration coverage ada. |
 | ADMIN | Semua operasi Food dan snapshot rating; impor/validasi CSV Altair, preview, publikasi atomic, dan riwayat batch. | **Implemented; API/DB integration Tested**; output Altair penelitian nyata **Pending Validation**. |
 
 ## 5. Functional Requirements
@@ -38,8 +38,8 @@ Pengguna membutuhkan cara menemukan makanan sesuai preferensi, sementara pola ra
 
 | ID | Requirement | Status |
 | --- | --- | --- |
-| P-01 | Home menjelaskan FoodRec, pendekatan rekomendasi manual, dan CTA auth tanpa katalog/hasil dummy. | Implemented |
-| P-02 | Responsive public layout, disabled navigation untuk fitur masa depan, footer. | Implemented |
+| P-01 | Guest melihat tujuan dan langkah produk; USER melihat ringkasan rating, langkah berikutnya, status rekomendasi, dan tanggal publikasi bila ada. Semua angka berasal dari database. | Implemented |
+| P-02 | Public navigation mengarah ke beranda, katalog, rating, dan rekomendasi yang tersedia; halaman tetap responsif. | Implemented; manual viewport/accessibility review Pending Validation |
 | A-01 | Register name/email/password/confirmation; validasi client UX dan server; email trim/lowercase; password minimal 8. | Implemented; PostgreSQL Server Action integration lulus |
 | A-02 | Semua register publik membuat role USER; role request diabaikan/dikunci server-side. | Implemented; role USER terverifikasi pada integration |
 | A-03 | Login email/password; generic error; redirect USER ke `/`, ADMIN ke `/admin`. | Implemented; auth/session/role integration lulus |
@@ -51,29 +51,30 @@ Pengguna membutuhkan cara menemukan makanan sesuai preferensi, sementara pola ra
 
 | ID | Requirement | Status |
 | --- | --- | --- |
-| U-01 | Guest/USER menjelajahi Food aktif di `/foods` dengan search, kategori, sorting dan pagination. | Implemented; PostgreSQL integration lulus |
+| U-01 | Guest/USER menjelajahi Food aktif di `/foods` dengan search, kategori, sorting dan pagination; USER dapat memfilter sudah/belum dinilai dan melihat progres rating aktif sebagai ringkasan, bukan target. | Implemented; PostgreSQL integration coverage |
 | U-02 | USER memberi/memperbarui rating integer 1–5; satu rating per pasangan user-Food. Guest dan ADMIN tidak dapat menulis rating. | Implemented; API/database integration lulus |
 | U-03 | `firstUsedAt` diisi sekali secara atomik pada rating pertama dan tidak berubah pada update rating. | Implemented; integration lulus |
-| U-04 | USER melihat riwayat rating sendiri di `/my-ratings`; tidak dapat membaca rating milik USER lain. | Implemented; owner-only integration lulus |
+| U-04 | USER melihat jumlah, rata-rata, dan riwayat rating sendiri di `/my-ratings`, serta kembali ke katalog; tidak dapat membaca rating milik USER lain. | Implemented; owner-only integration lulus |
 | U-05 | USER melihat rekomendasi batch PUBLISHED miliknya sendiri; rekomendasi yang sudah dinilai dan Food nonaktif disembunyikan. | Implemented; owner/filter integration Tested |
 
 ### Admin
 
 | ID | Requirement | Status |
 | --- | --- | --- |
-| AD-01 | Dashboard Admin memiliki server-side role guard, identitas admin, welcome state dan informasi modul mendatang tanpa statistik dummy. | Implemented; Guest/USER/ADMIN route integration lulus |
+| AD-01 | Dashboard Admin memiliki server-side role guard, identitas admin, jumlah makanan aktif, pengguna pemberi rating, total rating, jumlah snapshot, batch aktif, waktu publikasi terakhir, status batch terbaru, dan tindakan berikutnya berbasis kondisi data. | Implemented; statistik diambil dari database |
 | AD-02 | Provisioning admin lewat environment-backed idempotent seed; tidak auto-promote USER dan tidak hardcode credentials. | Implemented; seed idempotence dan admin login diuji |
 | AD-03 | Food Management list, server search/filter/sort/pagination, create/edit, image upload, activate/deactivate, history-aware permanent delete. | Implemented; PostgreSQL integration lulus |
 | AD-04 | CSV katalog dengan template, validation preview, row errors, insert-only commit atomik dan FoodImport history. | Implemented; PostgreSQL integration lulus |
 | AD-05 | Ekspor snapshot dataset rating tanpa PII untuk Altair, dengan checksum dan download ADMIN-only. | Implemented; PostgreSQL integration lulus |
 | AD-06 | ADMIN mengimpor hasil CSV dengan dataset sumber dan k/Top-N; validasi all-or-nothing, preview, error row, stale warnings, checksum, dan report. | Implemented; parser/API integration Tested |
 | AD-07 | Publish batch tervalidasi secara atomic; batch lama SUPERSEDED, publisher dan waktu tersimpan, history dapat ditinjau. | Implemented; PostgreSQL concurrent publication Tested |
+| AD-08 | Workflow empat tahap menampilkan status berbasis bukti database; dataset dapat dipilih/diunduh, proses Altair dijelaskan manual, CSV tervalidasi, batch kosong/invalid tidak dapat diterbitkan, dan riwayat dapat dicari/filter tanpa mengubah audit. | Implemented; parser/API/atomic publication integration Tested; file penelitian dan visual/a11y review Pending Validation |
 
 ## 6. User Flows
 
 ### Registrasi — Implemented
 
-Guest → `/register` → isi nama/email/password/konfirmasi → Server Action Zod memvalidasi semua field → email dinormalisasi → Better Auth membuat akun dan session → hook mengunci role `USER` → kembali ke `/`. Flow Server Action diuji terhadap PostgreSQL.
+Guest → `/register` → isi nama/email/password/konfirmasi → Server Action Zod memvalidasi semua field → email dinormalisasi → Better Auth membuat akun dan session → hook mengunci role `USER` → `/` menampilkan beranda personal dan langkah onboarding berbasis data akun.
 
 ### Login — Implemented
 
@@ -89,7 +90,7 @@ Guest/USER membuka `/foods` → hanya Food aktif ditampilkan → USER memilih ra
 
 ### Penerimaan rekomendasi — Implemented
 
-Setelah batch hasil Altair tervalidasi dan dipublikasikan, USER melihat hasil miliknya di `/recommendations`. Endpoint mengambil identity dari session, mengecualikan hasil yang kini telah dinilai dan Food nonaktif. Backend tidak menghitung UBCF.
+Setelah batch hasil Altair tervalidasi dan dipublikasikan, USER melihat hasil miliknya di `/recommendations`. Endpoint mengambil identity dari session, mengecualikan hasil yang kini telah dinilai dan Food nonaktif. Empty state membedakan belum ada rating, belum ada batch, akun tidak tercakup, seluruh kandidat sudah dinilai, dan tidak ada makanan aktif. Menyimpan rating tidak menghitung ulang UBCF atau menjamin hasil otomatis.
 
 ## 7. Admin Flows
 
@@ -101,8 +102,8 @@ Dashboard admin, Food Management, dan dataset rating **Implemented**:
 
 Alur berikut **Implemented**:
 
-4. **Altair manual:** ADMIN memuat CSV di Altair AI Studio Educational 2026.1.1, menjalankan UBCF/Cosine/user k-NN, lalu ekspor hasil. Tidak ada integrasi/API Altair; kesesuaian file real **Pending Validation**.
-5. **Impor/validasi hasil:** ADMIN memilih DatasetExport sumber, mengisi parameter pemrosesan, dan mengunggah `user_id,item_id,rank`. Server memverifikasi checksum/snapshot sumber, user/Food ID, rank, duplikasi, Top-N, rating sumber, status Food, dan staleness. Error struktural/referensial menyimpan DRAFT tanpa Recommendation rows.
+4. **Altair manual:** ADMIN memuat CSV di Altair AI Studio Educational 2026.1.1, menjalankan UBCF/Cosine/user k-NN, lalu ekspor hasil. FoodRec hanya memberi panduan dan tidak mengetahui proses eksternal selesai sebelum CSV diunggah. Tidak ada integrasi/API Altair; kesesuaian file real **Pending Validation**.
+5. **Impor/validasi hasil:** ADMIN memilih DatasetExport sumber, mengisi parameter pemrosesan, dan mengunggah `user_id,item_id,rank`. Server memverifikasi checksum/snapshot sumber, user/Food ID, rank, duplikasi, Top-N, rating sumber, status Food, staleness, dan jumlah baris non-kosong. Error struktural/referensial menyimpan DRAFT tanpa Recommendation rows.
 6. **Publikasi:** ADMIN meninjau report dan preview lalu konfirmasi. Server revalidasi dalam transaction; lock + partial unique index memastikan maksimal satu batch PUBLISHED. Batch aktif lama menjadi SUPERSEDED, tidak dihapus.
 7. **Hasil personal:** `/api/me/recommendations` memakai user dari session. `/recommendations` menampilkan rank dan link Food detail; hasil nonaktif/sudah dinilai disaring.
 
@@ -145,9 +146,9 @@ Better Auth memerlukan tabel teknis Session, Account, Verification. Session/Acco
 - Modern Food App, bersih, hangat, food-focused; background putih dan section cream.
 - Token: Primary `#F97316`, hover `#EA580C`, soft `#FFF7ED`, green `#14532D`, white `#FFFFFF`, text `#111827`, secondary `#6B7280`, border `#E5E7EB`.
 - Font Plus Jakarta Sans via Next font optimization; Lucide icons; rounded cards 12–16px; focus/hover/disabled/error/loading.
-- Public navigation mengaktifkan Home, Jelajahi Makanan, Rating Saya, dan Rekomendasi. Admin sidebar desktop/mobile mengaktifkan Kelola Makanan, Data Rating, dan Pemrosesan Rekomendasi.
+- Public navigation mengarahkan Home, Jelajahi Makanan, Rating Saya, dan Rekomendasi. Admin sidebar desktop/mobile mengarahkan Kelola Makanan, Data Rating, dan Pemrosesan Rekomendasi.
 - Halaman yang tersedia mencakup `/foods/[id]` dan USER-only `/recommendations`; admin pages mencakup `/admin/recommendations` dan detail `/admin/recommendations/[id]`.
-- Image preview menggunakan image tersimpan atau file terpilih; placeholder dipakai bila tidak ada foto. Tidak ada rating/statistik/rekomendasi dummy. Manual viewport/accessibility review **Pending Validation**.
+- Foto, nama, kategori, dan deskripsi tampil konsisten dengan placeholder bila foto tidak ada. Tidak ada rating/statistik/rekomendasi dummy. Manual viewport/accessibility review **Pending Validation**.
 
 ## 12. Non-Functional Requirements
 

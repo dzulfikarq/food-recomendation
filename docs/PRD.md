@@ -12,9 +12,13 @@ Implementasi mencakup foundation, autentikasi, Food Management, rating, snapshot
 - **Tested:** unit CSV checks dan PostgreSQL integration pada database `_test`; deployment database, storage, visual/accessibility, dan security/performance tetap terpisah.
 - **Pending Validation:** round-trip dengan file penelitian Altair nyata dan production operations.
 
+## FoodRec V2 status
+
+Phase A menambahkan pure Python UBCF core di `services/recommender`; website belum memanggilnya dan belum ada worker, queue, atau internal API. Existing Altair CSV workflow remains active. Altair parity is **Pending Validation** because research dataset, operator settings, and reference output are unavailable. Automatic processing remains **OFF**. See [`RECOMMENDATION_ENGINE_VALIDATION.md`](RECOMMENDATION_ENGINE_VALIDATION.md).
+
 ## 2. Problem Statement
 
-Pengguna membutuhkan cara menemukan makanan sesuai preferensi, sementara pola rating dapat memberi sinyal preferensi kolektif. FoodRec menyediakan katalog aktif dan rating eksplisit. Admin memproses dataset di Altair dan menerbitkan hasil; backend tidak menjalankan CF atau memperbarui hasil secara otomatis.
+Pengguna membutuhkan cara menemukan makanan sesuai preferensi, sementara pola rating dapat memberi sinyal preferensi kolektif. FoodRec menyediakan katalog aktif dan rating eksplisit. Admin memproses dataset di Altair dan menerbitkan hasil; Next.js belum menjalankan CF atau memperbarui hasil otomatis. Python Phase A core belum terhubung.
 
 ## 3. Product Goals
 

@@ -1,14 +1,16 @@
 # FoodRec
 
-FoodRec membantu pengguna menjelajahi makanan, menyimpan rating, dan melihat rekomendasi yang sudah diterbitkan untuk akun mereka. Admin mengekspor snapshot rating, memproses User-Based Collaborative Filtering dan Cosine Similarity secara manual di Altair AI Studio Educational 2026.1.1, lalu mengimpor, memvalidasi, dan menerbitkan hasil CSV. Backend tidak menghitung algoritma rekomendasi.
+FoodRec membantu pengguna menjelajahi makanan, menyimpan rating, dan melihat rekomendasi yang sudah diterbitkan untuk akun mereka. Workflow Altair manual tetap tersedia untuk penelitian. Python UBCF/Cosine core kini berada di `services/recommender`; belum menjadi worker dan belum terhubung ke website.
 
 ## Status
 
 - **Implemented:** user journey personal, katalog/rating, halaman rekomendasi, dashboard admin operasional, dan workflow CSV terpandu sampai publikasi.
+- **FoodRec V2 Phase A:** pure Python Cosine, user k-NN, rating prediction, deterministic Top-N, fixture sintetis, dan 14 unit tests. Belum ada job queue/API/worker integration.
+- **Automatic processing:** OFF. Altair parity **Pending Validation** sampai dataset penelitian, operator configuration, dan reference output tersedia.
 - **Admin workflow:** statistik dari database, empat tahap Dataset → Altair manual → Import/Validasi → Publish, snapshot pilihan, filter/pencarian riwayat, detail checksum dan metadata.
 - **Automated checks lulus:** `npm run lint`, `npm run typecheck`, `npm test` (14 tes), `npm run build`, dan `npm run test:integration` (4 tes PostgreSQL). Integration memakai database `foodrec_test` terisolasi.
 - **Pending Validation:** round-trip dengan file hasil Altair penelitian sesungguhnya, production database/storage, security/performance production, serta review visual, keyboard, dan screen reader lintas perangkat.
-- **Manual:** UBCF, Cosine Similarity, dan user k-NN tetap dijalankan di Altair AI Studio Educational 2026.1.1; website tidak menghitung algoritme.
+- **Manual research workflow:** UBCF, Cosine Similarity, dan user k-NN tetap dapat dijalankan di Altair AI Studio Educational 2026.1.1; existing CSV validation/publication tetap berlaku.
 
 Guest dapat melihat katalog aktif dan membuat akun. Setelah masuk, USER mendapat beranda personal, dapat menjelajahi `/foods`, memberi atau memperbarui rating 1–5, melihat `/my-ratings`, dan membuka `/recommendations`. Hasil hanya tampil setelah admin menerbitkan batch yang mencakup user; menyimpan rating tidak memicu pemrosesan otomatis. Dashboard admin dan pengelolaan katalog, snapshot, impor, validasi, publikasi, serta audit tersedia di `/admin`. Detail status dan batas validasi: [`docs/ROADMAP.md`](docs/ROADMAP.md).
 
@@ -16,6 +18,7 @@ Guest dapat melihat katalog aktif dan membuat akun. Setelah masuk, USER mendapat
 
 - Node.js 20.19+ dan npm.
 - PostgreSQL 15+ lokal, atau Docker Compose.
+- Python 3.11+ untuk Recommendation Engine tests.
 
 ## Setup development
 
@@ -64,6 +67,14 @@ npm run test:integration
 
 Script memerlukan production build, menerapkan migration dan seed pada database `_test`; tidak melakukan reset. Test menambah FoodImport/DatasetExport/RecommendationBatch audit records serta fixture user/food yang terikat histori; database `_test` harus terpisah dari DB development.
 
+Python unit tests memakai stdlib, tanpa runtime dependency tambahan:
+
+```powershell
+Set-Location services/recommender
+$env:PYTHONPATH = "src"
+python -m unittest discover -s tests -v
+```
+
 ## Perintah
 
 | Perintah | Fungsi |
@@ -105,3 +116,4 @@ Validasi memakai PostgreSQL 17 terisolasi. Docker tidak tersedia di environment 
 - [`docs/ROADMAP.md`](docs/ROADMAP.md) — Fase 1–8.
 - [`docs/DECISIONS.md`](docs/DECISIONS.md) — keputusan dan batasan.
 - [`docs/DESIGN.md`](docs/DESIGN.md) — user flow, halaman, komponen, dan prinsip UX FoodRec.
+- [`docs/RECOMMENDATION_ENGINE_VALIDATION.md`](docs/RECOMMENDATION_ENGINE_VALIDATION.md) — rumus, synthetic fixture, dan status parity Altair.

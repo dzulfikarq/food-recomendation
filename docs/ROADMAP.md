@@ -2,6 +2,17 @@
 
 **Implemented** = kode tersedia. **Tested** = automated/integration check lulus. **Planned** = belum dikerjakan. **Pending Validation** = butuh dataset nyata atau validasi operasional.
 
+## FoodRec V2
+
+| Phase | Status | Notes |
+| --- | --- | --- |
+| A — Foundation and Python core | **Implemented; 14 unit tests pass; research fixture Pending Validation** | Pure functions, synthetic fixture, documented baseline. |
+| B — Altair validation | **Blocked: Pending Validation** | Research dataset, operator configuration, and reference output not found. No parity claim. |
+| C — PostgreSQL jobs and authenticated worker API | Planned | No schema/API changes yet. |
+| D — Rating-triggered and scheduled processing | Planned; automatic processing OFF | Must wait for validation and integration gates. |
+| E — Admin/user automation UX | Planned | Existing manual CSV workflow remains unchanged. |
+| F — Full verification | Planned | No end-to-end worker verification yet. |
+
 | Fase | Cakupan | Status | Dependensi |
 | --- | --- | --- | --- |
 | [x] 1 — Project Foundation & Design System | App Router/TypeScript, Tailwind tokens, Plus Jakarta Sans, public/auth/admin layouts, shared UI, home, error/404. | **Implemented**; lint/typecheck/build lulus; manual responsive/a11y review **Pending Validation**. | — |
@@ -43,4 +54,4 @@
 - [x] Dashboard Admin menggunakan statistik aktual; workflow empat tahap dan riwayat batch search/filter memakai query baca saja.
 - [x] Parser/import menolak hasil kosong; publish revalidasi server dan mempertahankan atomic publication.
 
-Altair tetap proses manual; validasi round-trip dengan file hasil penelitian sebenarnya masih diperlukan. Tidak ada CF backend, integrasi otomatis Altair, rekomendasi dummy, atau scheduler. Tidak ada database reset atau penghapusan snapshot/batch dalam UX V1.
+Altair tetap proses manual; validasi round-trip dengan file hasil penelitian sebenarnya masih diperlukan. Python core belum terintegrasi ke web/worker; automatic processing tetap OFF. Tidak ada rekomendasi dummy atau scheduler. Tidak ada database reset atau penghapusan snapshot/batch dalam UX V1.

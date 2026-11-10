@@ -49,6 +49,11 @@ prisma/
   food-catalog.ts        40 Food seed records
 scripts/
   test-integration.mjs   dedicated `_test` DB migration/seed/test runner
+services/recommender/
+  pyproject.toml         Python project; no runtime dependencies
+  src/engine/            pure Cosine, user k-NN, prediction, Top-N
+  src/schemas.py         typed engine results and statuses
+  tests/                 synthetic fixture and stdlib unit tests
 ```
 
 Server Components default. Client Components dipakai untuk auth forms, Food form/upload preview, import preview/commit, Rating input, dataset export/loading, recommendation CSV preview/publish confirmation, dan recommendation retry/loading states. Mutasi auth melewati Server Actions; Food/Rating/export/recommendation mutations memakai Route Handlers terproteksi.
@@ -77,7 +82,7 @@ Better Auth menyimpan credential hash di `Account.password`. Ini mengikuti skema
 - Rating write memakai row lock pada Food dan transaction untuk upsert Rating + mengisi `firstUsedAt` hanya sekali. Existing `@@unique([userId, foodId])` dan SQL CHECK tetap menjadi guard DB.
 - `/my-ratings` dan `/api/my-ratings` hanya mengembalikan rating milik USER aktif.
 - ADMIN snapshot memakai satu query terurut, membuat CSV `user_id,food_id,rating`, hash SHA-256 dan private file key. `DatasetExport` metadata immutable; download mengecek checksum dan hanya ADMIN. Snapshot saat ini dibuffer di memory; gunakan cursor streaming bila ukuran dataset tumbuh material.
-- Ekspor tidak memasukkan nama, email, password, atau data personal; tidak ada UBCF/Cosine code atau Altair API.
+- Ekspor tidak memasukkan nama, email, password, atau data personal. Tidak ada UBCF/Cosine code di Next.js atau Altair API; pure Python core kini terpisah di `services/recommender` dan belum terhubung.
 
 ## Recommendation import and publication Fase 6–7
 
@@ -95,6 +100,8 @@ Better Auth menyimpan credential hash di `Account.password`. Ini mengikuti skema
 
 Initial migration memiliki FK restrictive untuk histori penelitian, check constraints skor/rank/count, trigger immutable `Food.foodCode`/`DatasetExport`, serta trigger perlindungan histori. Hanya record teknis Account/Session cascade ke User. Local Docker Compose memakai named volume `foodrec-postgres` dan tidak menghapus volume saat stop.
 
-## Recommendation boundary — Implemented, end-to-end validation pending
+## Recommendation boundary — V2 Phase A implemented; integration pending
 
-Backend FoodRec hanya menjadi sumber dataset, memvalidasi CSV, menyimpan, dan menyajikan output. User-Based Collaborative Filtering dan Cosine Similarity diproses manual di Altair AI Studio Educational 2026.1.1. Kompatibilitas dengan file hasil Altair penelitian sesungguhnya masih **Pending Validation**; tidak ada kode algoritma atau integrasi Altair.
+Existing web path tetap memakai Altair CSV import, validation, and atomic publication. Phase A menambahkan pure Python UBCF core di `services/recommender`, belum worker atau website integration. Baseline similarity/prediction assumptions dan synthetic fixture didokumentasikan di [`RECOMMENDATION_ENGINE_VALIDATION.md`](RECOMMENDATION_ENGINE_VALIDATION.md). Altair parity **Pending Validation** karena research dataset, operator configuration, dan reference output tidak ada di repository. Automatic processing tetap **OFF**.
+
+Next.js remains owner of authentication, authorization, PostgreSQL migrations, snapshots, validation, and publication. Python worker communication, durable jobs, and batch source metadata are deferred to later V2 phases; Python has no direct database ownership.

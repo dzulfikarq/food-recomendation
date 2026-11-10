@@ -1,0 +1,71 @@
+{
+  "bundle": "FoodRec Phase B Altair output comparison",
+  "references_status": "manual screenshot transcriptions; not verified exported Altair CSV",
+  "files": {
+    "datasets/ratings_uji_collaborative_filtering_43.csv": {
+      "bytes": 367,
+      "sha256": "8425899720fd43edb06822fb7f9efb80c47b563490a042bbc2b05ca865f31a53",
+      "origin": "earlier conversation upload or generated artifact"
+    },
+    "datasets/foodrec_offline_train_264.csv": {
+      "bytes": 2257,
+      "sha256": "19e34a779d3637b12667f4a7c3f4f369c8c901c45513b25f2965811ffa6fa349",
+      "origin": "earlier conversation upload or generated artifact"
+    },
+    "datasets/foodrec_offline_test_66.csv": {
+      "bytes": 578,
+      "sha256": "a5bf580b2d951864937f7f3803de9df50f7280556f02e5d0d32c38a6945dfaea",
+      "origin": "earlier conversation upload or generated artifact"
+    },
+    "datasets/foodrec_snapshot_879.csv": {
+      "bytes": 7419,
+      "sha256": "a2cda622ac8702538c3ba0d9c0ae0ad73be9e88c5d3699e3933cd215c2f23337",
+      "origin": "earlier conversation upload or generated artifact"
+    },
+    "workflows/FoodRec_Top2_Fixed.xml": {
+      "bytes": 16326,
+      "sha256": "d70e9a9139a90cd691eec040316aa4c5c6057cf1983028a4461c22cff390b15c",
+      "origin": "earlier conversation upload or generated artifact"
+    },
+    "workflows/test2_snapshot879.xml": {
+      "bytes": 16577,
+      "sha256": "9d5e20ae4503aebbaa96d075b853de013bac5665e4cd848f228acb180b3380f8",
+      "origin": "earlier conversation upload or generated artifact"
+    },
+    "workflows/FoodRec_879Rating_EmptyBranch_Fix.xml": {
+      "bytes": 11887,
+      "sha256": "de96895ffd423e1b2d3090d064b258bbee61d1cb5cb45292e9d78008868c54d5",
+      "origin": "earlier conversation upload or generated artifact"
+    },
+    "screenshots/altair_43ratings_top2.png": {
+      "bytes": 12531,
+      "sha256": "e5e74ac00952155400cc6af5231395a422314f26d89881e01f3b643bc250de73",
+      "origin": "earlier conversation upload or generated artifact"
+    },
+    "screenshots/altair_train264_top1.png": {
+      "bytes": 23765,
+      "sha256": "5d9afaa997d21bd843f5bac2e2bd8702b2e6b181a7fc37ee884e0e2ed2050ca8",
+      "origin": "earlier conversation upload or generated artifact"
+    },
+    "docs/FoodRec_Panduan_Dataset_Offline.md": {
+      "bytes": 2617,
+      "sha256": "e22cf93bfbbe2affe36079abe34065fb2fc882bd7621e5fdf828b56613ab3c36",
+      "origin": "earlier conversation upload or generated artifact"
+    },
+    "references/altair_reference_top2_43_SCREENSHOT_TRANSCRIPTION.csv": {
+      "bytes": 61,
+      "sha256": "6cd1d66defae9742bb24c65035d201419800a0215fe1696fceef0b0af7216407",
+      "origin": "transcribed screenshot"
+    },
+    "references/altair_reference_top1_train264_SCREENSHOT_TRANSCRIPTION.csv": {
+      "bytes": 187,
+      "sha256": "5a6cc9b320e981b5f45b7f6cb47441f3cde32e19a93706073e1753a999c88271",
+      "origin": "transcribed screenshot"
+    },
+    "README.md": {
+      "bytes": 4597,
+      "sha256": "016c16a74684f88ddc6ddf026daae2d3223d1d0666564ffff546534df40d2e9d",
+      "origin": "current assistant notes"
+    }
+  }
+}

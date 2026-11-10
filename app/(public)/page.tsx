@@ -1,77 +1,135 @@
 import Link from "next/link";
-import { ArrowDown, ArrowRight, ArrowUpRight, Check, CookingPot, Database, LockKeyhole, Sparkles, UtensilsCrossed } from "lucide-react";
-import { Alert, Badge, Container } from "@/components/ui";
+import { ArrowRight, ArrowUpRight, CookingPot, Database, Sparkles, Star, UtensilsCrossed } from "lucide-react";
+import { Badge, ButtonLink, Card, Container } from "@/components/ui";
 import { getSession } from "@/lib/authz";
+import { getUserRecommendations } from "@/lib/recommendations/service";
+import { prisma } from "@/lib/prisma";
 
-const steps = [
-  { number: "01", icon: UtensilsCrossed, title: "Jelajahi dan beri rating", description: "Pilih makanan aktif dan simpan rating eksplisit 1–5 untuk membangun profil selera.", status: "Tersedia" },
-  { number: "02", icon: Database, title: "Admin ekspor snapshot CSV", description: "Snapshot berisi ID user, ID food, dan rating—tanpa data personal.", status: "Export tersedia" },
-  { number: "03", icon: Sparkles, title: "Altair memproses data", description: "UBCF dan Cosine Similarity dijalankan manual; hasil rekomendasi belum diimpor ke website.", status: "Manual · Fase berikutnya" }
-];
+function formatDate(value: Date) {
+  return new Intl.DateTimeFormat("id-ID", { dateStyle: "long", timeStyle: "short" }).format(value);
+}
 
 export default async function HomePage({ searchParams }: { searchParams: Promise<{ error?: string }> }) {
   const [{ error }, session] = await Promise.all([searchParams, getSession()]);
 
-  return (
-    <>
-      <section className="relative overflow-hidden bg-soft">
-        <Container className="grid min-h-[600px] items-center gap-12 py-16 lg:grid-cols-[1.1fr_.9fr] lg:py-24">
-          <div className="relative z-10 max-w-2xl">
-            <Badge className="gap-1.5 bg-white text-orange-900"><Sparkles size={13} aria-hidden="true" /> PERSONAL FOOD DISCOVERY</Badge>
-            <h1 className="mt-7 text-5xl font-extrabold leading-[1.08] tracking-[-.055em] text-gray-950 sm:text-6xl lg:text-7xl">Selera kamu,<br /><span className="text-primary">lebih terarah.</span></h1>
-            <p className="mt-6 max-w-xl text-base leading-7 text-secondary sm:text-lg sm:leading-8">Jelajahi katalog makanan, simpan rating, dan bantu membentuk dataset untuk rekomendasi yang diproses secara terpisah.</p>
-            <div className="mt-8 flex flex-wrap gap-3">
-              {!session ? <><Link href="/register" className="inline-flex min-h-12 items-center gap-2 rounded-xl bg-primary px-5 text-sm font-bold text-white shadow-sm transition hover:bg-primary-hover">Buat akun <ArrowRight size={17} aria-hidden="true" /></Link><Link href="/login" className="inline-flex min-h-12 items-center gap-2 rounded-xl border border-border bg-white px-5 text-sm font-bold text-gray-800 transition hover:bg-gray-50"><LockKeyhole size={16} aria-hidden="true" /> Masuk</Link></> : <div className="flex flex-wrap items-center gap-3"><div className="rounded-xl border border-orange-100 bg-white px-4 py-3 text-sm font-semibold text-gray-800"><Check size={17} className="mr-2 inline text-accent" aria-hidden="true" /> Halo, {session.user.name}.</div><Link href={session.user.role === "ADMIN" ? "/admin" : "/foods"} className="inline-flex min-h-12 items-center gap-2 rounded-xl bg-primary px-5 text-sm font-bold text-white hover:bg-primary-hover">{session.user.role === "ADMIN" ? "Dashboard" : "Jelajahi Makanan"} <ArrowRight size={17} aria-hidden="true" /></Link></div>}
-            </div>
-            <a href="#cara-kerja" className="mt-8 inline-flex items-center gap-2 text-sm font-semibold text-gray-600 hover:text-gray-950">Kenali pendekatan FoodRec <ArrowDown size={15} aria-hidden="true" /></a>
-          </div>
+  if (session?.user.role === "USER") {
+    const userId = Number(session.user.id);
+    const [ratingCount, foodCount, activeRatingCount, recommendations] = await Promise.all([
+      prisma.rating.count({ where: { userId } }),
+      prisma.food.count({ where: { isActive: true } }),
+      prisma.rating.count({ where: { userId, food: { isActive: true } } }),
+      getUserRecommendations(userId)
+    ]);
+    const name = session.user.name.trim().split(/\s+/)[0] || session.user.name;
+    const nextAction = recommendations.status === "READY"
+      ? { href: "/recommendations", label: "Lihat rekomendasi" }
+      : foodCount === 0
+        ? { href: "/foods", label: "Lihat katalog makanan" }
+        : ratingCount > 0 && activeRatingCount >= foodCount
+          ? { href: "/my-ratings", label: "Lihat rating saya" }
+          : ratingCount > 0
+            ? { href: "/foods?ratingStatus=unrated", label: "Cari yang belum dinilai" }
+            : { href: "/foods", label: "Jelajahi makanan" };
 
-          <div className="relative mx-auto flex min-h-[340px] w-full max-w-[500px] items-center justify-center sm:min-h-[420px]" aria-label="Ilustrasi konsep FoodRec" role="img">
-            <div className="absolute size-64 rounded-full border border-orange-200 sm:size-80" />
-            <div className="absolute size-48 rounded-full border border-dashed border-orange-300 sm:size-64" />
-            <div className="relative grid size-40 place-items-center rounded-[2rem] bg-white text-primary shadow-[0_28px_70px_-28px_rgba(234,88,12,.35)] sm:size-52 sm:rounded-[2.5rem]">
-              <CookingPot className="size-20 sm:size-28" strokeWidth={1.25} aria-hidden="true" />
-              <span className="absolute -right-5 top-5 grid size-12 place-items-center rounded-2xl bg-accent text-white shadow-lg sm:-right-7 sm:size-16"><Sparkles size={24} aria-hidden="true" /></span>
-              <span className="absolute -bottom-4 -left-8 rounded-xl border border-border bg-white px-3 py-2 text-xs font-bold text-gray-700 shadow-lg sm:-left-12 sm:px-4 sm:py-3">Taste-led discovery</span>
-            </div>
-            <span className="absolute right-2 top-10 rounded-full bg-white px-3 py-2 text-xs font-semibold text-orange-900 shadow-md sm:right-0">Personal, by design</span>
-            <span className="absolute bottom-8 right-4 rounded-full bg-white p-3 text-primary shadow-md sm:bottom-12 sm:right-2"><UtensilsCrossed size={20} aria-hidden="true" /></span>
-          </div>
-        </Container>
-        <div className="absolute -bottom-28 -left-20 size-64 rounded-full bg-orange-100/70 blur-3xl" />
+    return <Container className="py-10 sm:py-14">
+      {error === "forbidden" && <p role="alert" className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">Halaman tersebut hanya tersedia untuk administrator.</p>}
+      <section className="rounded-3xl border border-orange-100 bg-soft p-6 sm:p-9">
+        <Badge className="gap-1.5 bg-white text-orange-900"><Sparkles size={13} aria-hidden="true" /> RUANG SELERA KAMU</Badge>
+        <h1 className="mb-0 mt-5 text-3xl font-extrabold tracking-tight text-gray-950 sm:text-4xl">Hai, {name}!</h1>
+        <p className="mb-0 mt-3 max-w-2xl text-sm leading-6 text-secondary sm:text-base">Kamu sudah memberi rating pada <strong className="text-gray-900">{ratingCount} makanan</strong>. Jelajahi makanan yang kamu kenal dan simpan pendapatmu—kamu tidak perlu menilai semuanya.</p>
+        <div className="mt-6 flex flex-wrap gap-3">
+          <ButtonLink href="/foods"><UtensilsCrossed size={16} aria-hidden="true" /> Jelajahi Makanan</ButtonLink>
+          <ButtonLink href="/my-ratings" variant="secondary"><Star size={16} aria-hidden="true" /> Rating Saya</ButtonLink>
+        </div>
       </section>
 
-      <section id="cara-kerja" className="scroll-mt-28 py-20 sm:py-28">
-        <Container>
-          <div className="mx-auto mb-12 max-w-2xl text-center">
-            <p className="text-xs font-bold uppercase tracking-[.18em] text-primary">RANCANGAN SISTEM</p>
-            <h2 className="mt-3 text-3xl font-extrabold tracking-tight text-gray-950 sm:text-4xl">Dari preferensi menuju penemuan</h2>
-            <p className="mt-4 text-sm leading-6 text-secondary sm:text-base">Rekomendasi nantinya dihitung di Altair AI Studio Educational 2026.1.1, bukan oleh backend website.</p>
-          </div>
-          <div className="grid gap-4 md:grid-cols-3">
-            {steps.map(({ number, icon: Icon, title, description, status }) => (
-              <article key={number} className="rounded-2xl border border-border bg-white p-6 transition hover:-translate-y-1 hover:shadow-lg sm:p-7">
-                <div className="flex items-center justify-between"><span className="grid size-12 place-items-center rounded-2xl bg-soft text-primary"><Icon size={22} aria-hidden="true" /></span><span className="text-sm font-bold tracking-widest text-gray-300">{number}</span></div>
-                <h3 className="mt-6 text-lg font-bold tracking-tight text-gray-950">{title}</h3>
-                <p className="mb-0 mt-2 text-sm leading-6 text-secondary">{description}</p>
-                <Badge className={`mt-5 ${number === "03" ? "bg-gray-100 text-gray-600" : "bg-green-50 text-green-800"}`}>{status}</Badge>
-              </article>
-            ))}
-          </div>
-          <div className="mt-8 flex items-start gap-3 rounded-2xl border border-orange-100 bg-soft p-5 text-sm leading-6 text-orange-950">
-            <Sparkles className="mt-0.5 size-5 shrink-0 text-primary" aria-hidden="true" />
-            <p className="m-0">Katalog, rating, dan ekspor snapshot rating tersedia. Website tidak menghitung algoritma; impor dan publikasi hasil rekomendasi menyusul.</p>
-          </div>
-        </Container>
-      </section>
+      <div className="mt-6 grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.5fr)]">
+        <Card className="p-5 sm:p-6">
+          <p className="m-0 text-xs font-bold uppercase tracking-[.14em] text-primary">LANGKAH BERIKUTNYA</p>
+          <h2 className="mb-0 mt-3 text-lg font-bold text-gray-950">{ratingCount ? "Lanjutkan sesuai seleramu" : "Mulai dari makanan yang kamu kenal"}</h2>
+          <p className="mb-0 mt-2 text-sm leading-6 text-secondary">{ratingCount ? "Beri rating pada makanan yang pernah kamu coba, atau lihat rating yang sudah tersimpan." : "Beberapa rating dapat membantu menggambarkan seleramu, tetapi tidak menjamin rekomendasi langsung tersedia. Hasil muncul setelah admin menerbitkan rekomendasi untuk akunmu."}</p>
+          <Link href={nextAction.href} className="mt-5 inline-flex min-h-10 items-center gap-2 rounded-xl bg-primary px-4 text-sm font-bold text-white hover:bg-primary-hover">{nextAction.label}<ArrowRight size={15} aria-hidden="true" /></Link>
+          <p className="mb-0 mt-3 text-xs text-secondary">{foodCount} makanan aktif tersedia di katalog.</p>
+        </Card>
 
-      <section className="bg-gray-950 py-14 text-white sm:py-16">
-        <Container className="flex flex-col gap-7 sm:flex-row sm:items-center sm:justify-between">
-          <div><p className="mb-2 text-xs font-bold uppercase tracking-[.18em] text-orange-300">MULAI DARI FONDASI</p><h2 className="mb-0 text-2xl font-extrabold tracking-tight sm:text-3xl">Bangun profil FoodRec kamu.</h2></div>
-          <Link href={!session ? "/register" : session.user.role === "ADMIN" ? "/admin" : "/foods"} className="inline-flex min-h-12 shrink-0 items-center gap-2 self-start rounded-xl bg-primary px-5 text-sm font-bold text-white hover:bg-primary-hover sm:self-auto">{!session ? "Daftar sekarang" : session.user.role === "ADMIN" ? "Dashboard admin" : "Jelajahi makanan"} <ArrowUpRight size={17} aria-hidden="true" /></Link>
-          {error === "forbidden" && <Alert>Halaman tersebut hanya tersedia untuk administrator.</Alert>}
-        </Container>
-      </section>
-    </>
-  );
+        <Card className="p-5 sm:p-6">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div><p className="m-0 text-xs font-bold uppercase tracking-[.14em] text-primary">REKOMENDASI</p><h2 className="mb-0 mt-3 text-lg font-bold text-gray-950">Status rekomendasi</h2></div>
+            {recommendations.publishedAt && <Badge className="bg-green-50 text-green-800">Diperbarui {formatDate(recommendations.publishedAt)}</Badge>}
+          </div>
+          <p className="mb-0 mt-3 text-sm leading-6 text-secondary">{recommendationMessage(recommendations.status, recommendations.recommendations.length)}</p>
+          <Link href="/recommendations" className="mt-5 inline-flex min-h-10 items-center gap-2 rounded-xl border border-border bg-white px-4 text-sm font-bold text-gray-800 hover:bg-gray-50">{recommendations.status === "READY" ? "Lihat rekomendasi" : "Lihat status rekomendasi"}<ArrowRight size={15} aria-hidden="true" /></Link>
+        </Card>
+      </div>
+
+      <div className="mt-6 grid gap-3 sm:grid-cols-3" aria-label="Alur FoodRec">
+        <JourneyStep number="1" icon={UtensilsCrossed} title="Jelajahi makanan" description="Cari makanan yang menarik bagimu." />
+        <JourneyStep number="2" icon={Star} title="Beri rating" description="Nilai makanan yang memang kamu kenal." />
+        <JourneyStep number="3" icon={Sparkles} title="Lihat rekomendasi" description="Cek hasil setelah admin menerbitkannya." />
+      </div>
+    </Container>;
+  }
+
+  return <>
+    <section className="relative overflow-hidden bg-soft">
+      <Container className="grid min-h-[540px] items-center gap-12 py-16 lg:grid-cols-[1.1fr_.9fr] lg:py-20">
+        <div className="relative z-10 max-w-2xl">
+          <Badge className="gap-1.5 bg-white text-orange-900"><Sparkles size={13} aria-hidden="true" /> TEMUKAN MAKANAN SESUAI SELERA</Badge>
+          <h1 className="mt-7 text-5xl font-extrabold leading-[1.08] tracking-[-.055em] text-gray-950 sm:text-6xl lg:text-7xl">Kenali seleramu,<br /><span className="text-primary">temukan pilihanmu.</span></h1>
+          <p className="mt-6 max-w-xl text-base leading-7 text-secondary sm:text-lg sm:leading-8">Jelajahi katalog makanan, beri rating pada yang pernah kamu coba, lalu lihat rekomendasi yang sudah disiapkan untuk akunmu.</p>
+          <div className="mt-8 flex flex-wrap gap-3">
+            {!session ? <><ButtonLink href="/register">Buat akun <ArrowRight size={17} aria-hidden="true" /></ButtonLink><ButtonLink href="/login" variant="secondary">Masuk</ButtonLink></> : <ButtonLink href="/admin">Buka dashboard admin <ArrowRight size={17} aria-hidden="true" /></ButtonLink>}
+            <ButtonLink href="/foods" variant="secondary">Jelajahi makanan</ButtonLink>
+          </div>
+          {error === "forbidden" && <p role="alert" className="mt-4 text-sm font-medium text-red-700">Halaman tersebut hanya tersedia untuk administrator.</p>}
+        </div>
+
+        <div className="relative mx-auto flex min-h-[300px] w-full max-w-[500px] items-center justify-center sm:min-h-[380px]" aria-label="Ilustrasi makanan" role="img">
+          <div className="absolute size-64 rounded-full border border-orange-200 sm:size-80" />
+          <div className="absolute size-48 rounded-full border border-dashed border-orange-300 sm:size-64" />
+          <div className="relative grid size-40 place-items-center rounded-[2rem] bg-white text-primary shadow-[0_28px_70px_-28px_rgba(234,88,12,.35)] sm:size-52 sm:rounded-[2.5rem]">
+            <CookingPot className="size-20 sm:size-28" strokeWidth={1.25} aria-hidden="true" />
+            <span className="absolute -right-5 top-5 grid size-12 place-items-center rounded-2xl bg-accent text-white shadow-lg sm:-right-7 sm:size-16"><Sparkles size={24} aria-hidden="true" /></span>
+            <span className="absolute -bottom-4 -left-8 rounded-xl border border-border bg-white px-3 py-2 text-xs font-bold text-gray-700 shadow-lg sm:-left-12 sm:px-4 sm:py-3">Dari selera kamu</span>
+          </div>
+          <span className="absolute right-2 top-10 rounded-full bg-white px-3 py-2 text-xs font-semibold text-orange-900 shadow-md sm:right-0">Pilihan lebih personal</span>
+        </div>
+      </Container>
+    </section>
+
+    <section className="py-16 sm:py-20">
+      <Container>
+        <div className="mx-auto mb-10 max-w-2xl text-center">
+          <p className="text-xs font-bold uppercase tracking-[.18em] text-primary">CARA MENGGUNAKAN FOODREC</p>
+          <h2 className="mt-3 text-3xl font-extrabold tracking-tight text-gray-950 sm:text-4xl">Mulai dari makanan yang kamu kenal</h2>
+          <p className="mt-4 text-sm leading-6 text-secondary sm:text-base">Rating tersimpan di akunmu. Admin mengolah data secara terpisah dan menerbitkan rekomendasi; menyimpan rating tidak otomatis menghasilkan rekomendasi.</p>
+        </div>
+        <div className="grid gap-4 md:grid-cols-3">
+          <JourneyStep number="1" icon={UtensilsCrossed} title="Jelajahi makanan" description="Cari nama atau kategori, lalu buka detail untuk melihat foto dan deskripsi." />
+          <JourneyStep number="2" icon={Star} title="Beri rating 1–5" description="Nilai hanya makanan yang kamu kenal. Kamu bisa mengubah rating kapan saja." />
+          <JourneyStep number="3" icon={Database} title="Lihat rekomendasi" description="Admin memproses data secara terpisah. Hasil tampil setelah batch yang sesuai diterbitkan." />
+        </div>
+        <div className="mt-7 flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-orange-100 bg-soft p-5">
+          <p className="m-0 max-w-3xl text-sm leading-6 text-orange-950">FoodRec tidak menjanjikan rekomendasi langsung setelah rating disimpan. Rekomendasi bergantung pada hasil pemrosesan dan publikasi admin.</p>
+          <Link href={!session ? "/register" : "/admin"} className="inline-flex min-h-10 items-center gap-2 rounded-xl bg-primary px-4 text-sm font-bold text-white hover:bg-primary-hover">{!session ? "Buat akun" : "Dashboard admin"}<ArrowUpRight size={16} aria-hidden="true" /></Link>
+        </div>
+      </Container>
+    </section>
+  </>;
+}
+
+function recommendationMessage(status: string, count: number) {
+  switch (status) {
+    case "READY": return `${count} rekomendasi tersedia untukmu. Buka halaman rekomendasi untuk melihat detailnya.`;
+    case "NO_RATINGS": return "Belum ada rating. Mulai dengan makanan yang pernah kamu coba; hasil tidak langsung tersedia setelah rating.";
+    case "NO_BATCH": return "Ratingmu tersimpan. Belum ada rekomendasi yang diterbitkan; kamu bisa tetap menjelajahi katalog.";
+    case "NOT_INCLUDED": return "Akunmu belum tercakup dalam hasil yang diterbitkan terakhir. Kamu tetap bisa menjelajahi makanan dan rating milikmu.";
+    case "ALL_RATED": return "Semua rekomendasi yang tersedia sudah kamu nilai. Rating tersebut tetap tersimpan di akunmu.";
+    case "NO_AVAILABLE_FOODS": return "Belum ada rekomendasi aktif yang bisa ditampilkan. Coba jelajahi katalog makanan.";
+    default: return "Status rekomendasi belum dapat dimuat.";
+  }
+}
+
+function JourneyStep({ number, icon: Icon, title, description }: { number: string; icon: typeof Star; title: string; description: string }) {
+  return <Card className="p-5 sm:p-6"><div className="flex items-center justify-between"><span className="grid size-11 place-items-center rounded-2xl bg-soft text-primary"><Icon size={21} aria-hidden="true" /></span><span className="text-sm font-bold tracking-widest text-gray-300">{number.padStart(2, "0")}</span></div><h2 className="mb-0 mt-5 text-lg font-bold tracking-tight text-gray-950">{title}</h2><p className="mb-0 mt-2 text-sm leading-6 text-secondary">{description}</p></Card>;
 }

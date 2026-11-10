@@ -40,7 +40,7 @@ export async function listFoods(query: FoodListQuery) {
   };
 }
 
-export async function listPublicFoods(query: PublicFoodQuery) {
+export async function listPublicFoods(query: PublicFoodQuery, userId?: number | null) {
   const where: Prisma.FoodWhereInput = { isActive: true };
   if (query.search) {
     where.OR = [
@@ -49,6 +49,8 @@ export async function listPublicFoods(query: PublicFoodQuery) {
     ];
   }
   if (query.category) where.category = query.category;
+  if (userId && query.ratingStatus === "rated") where.ratings = { some: { userId } };
+  if (userId && query.ratingStatus === "unrated") where.ratings = { none: { userId } };
 
   const [foods, total] = await Promise.all([
     prisma.food.findMany({

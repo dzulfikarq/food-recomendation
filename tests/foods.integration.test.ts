@@ -3,16 +3,18 @@ import { createServer } from "node:http";
 import { randomUUID } from "node:crypto";
 import test from "node:test";
 import "@/tests/helpers/test-database";
+import { publicFoodQuerySchema } from "@/lib/food/schemas";
 
 test("Food Management CRUD, image uploads, hybrid delete, and atomic insert-only CSV import", async () => {
   Reflect.set(process.env, "NODE_ENV", "production");
   Reflect.set(process.env, "AUTH_URL", "http://127.0.0.1:3102");
-  const [{ default: next }, { hashPassword }, { readApplicationEnvironment }, { prisma }, { removeFoodImage, removeCsvDraft }] = await Promise.all([
+  const [{ default: next }, { hashPassword }, { readApplicationEnvironment }, { prisma }, { removeFoodImage, removeCsvDraft }, { listPublicFoods }] = await Promise.all([
     import("next"),
     import("better-auth/crypto"),
     import("@/lib/env"),
     import("@/lib/prisma"),
-    import("@/lib/food/storage")
+    import("@/lib/food/storage"),
+    import("@/lib/food/service")
   ]);
   const env = readApplicationEnvironment();
   const baseUrl = env.AUTH_URL;
@@ -93,6 +95,12 @@ test("Food Management CRUD, image uploads, hybrid delete, and atomic insert-only
     const foodId = (await created.json()).data.id as number;
     foodIds.push(foodId);
     assert.equal((await prisma.food.findUniqueOrThrow({ where: { id: foodId } })).isActive, true);
+    const foodSearch = publicFoodQuerySchema.parse({ search: foodCode });
+    assert.deepEqual((await listPublicFoods({ ...foodSearch, ratingStatus: "unrated" }, Number(user.id))).foods.map(({ id }) => id), [foodId]);
+    assert.deepEqual((await listPublicFoods({ ...foodSearch, ratingStatus: "rated" }, Number(user.id))).foods, []);
+    await prisma.rating.create({ data: { userId: Number(user.id), foodId, rating: 4 } });
+    assert.deepEqual((await listPublicFoods({ ...foodSearch, ratingStatus: "rated" }, Number(user.id))).foods.map(({ id }) => id), [foodId]);
+    assert.deepEqual((await listPublicFoods({ ...foodSearch, ratingStatus: "unrated" }, Number(user.id))).foods, []);
     assert.equal((await get(`/admin/foods/${foodId}/edit`, adminCookie)).status, 200);
     assert.equal((await json("/api/admin/foods", "POST", { ...createFood, name: "Duplicate" }, adminCookie)).status, 409);
 

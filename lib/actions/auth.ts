@@ -9,7 +9,7 @@ export type AuthActionState = { error?: string };
 
 export async function registerAction(_state: AuthActionState, formData: FormData): Promise<AuthActionState> {
   const input = registrationSchema.safeParse(Object.fromEntries(formData));
-  if (!input.success) return { error: input.error.issues[0]?.message ?? "Check your registration details." };
+  if (!input.success) return { error: input.error.issues[0]?.message ?? "Periksa kembali data pendaftaran." };
 
   try {
     await auth.api.signUpEmail({
@@ -21,7 +21,7 @@ export async function registerAction(_state: AuthActionState, formData: FormData
       headers: await headers()
     });
   } catch {
-    return { error: "Could not create account. Check your details or try another email." };
+    return { error: "Akun tidak dapat dibuat. Periksa data atau gunakan email lain." };
   }
 
   redirect("/");
@@ -29,7 +29,7 @@ export async function registerAction(_state: AuthActionState, formData: FormData
 
 export async function loginAction(_state: AuthActionState, formData: FormData): Promise<AuthActionState> {
   const input = loginSchema.safeParse(Object.fromEntries(formData));
-  if (!input.success) return { error: "Enter a valid email and password." };
+  if (!input.success) return { error: "Masukkan email dan password yang valid." };
 
   let redirectPath = "/";
   try {
@@ -39,7 +39,7 @@ export async function loginAction(_state: AuthActionState, formData: FormData): 
     });
     if (result.user.role === "ADMIN") redirectPath = "/admin";
   } catch {
-    return { error: "Email or password is incorrect." };
+    return { error: "Email atau password salah." };
   }
 
   redirect(redirectPath);

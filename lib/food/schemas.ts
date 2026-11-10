@@ -55,6 +55,7 @@ export const ratingInputSchema = z.object({ rating: z.number().int().min(1).max(
 export const publicFoodQuerySchema = z.object({
   search: z.string().trim().max(120).default(""),
   category: z.enum(FOOD_CATEGORIES).optional(),
+  ratingStatus: z.enum(["all", "unrated", "rated"]).default("all"),
   sort: z.enum(["newest", "oldest", "name-asc", "name-desc"]).default("newest"),
   page: z.coerce.number().int().positive().default(1),
   pageSize: z.coerce.number().int().min(1).max(24).default(12)

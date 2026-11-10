@@ -57,6 +57,11 @@ class NeighborAndPredictionTests(unittest.TestCase):
         self.assertAlmostEqual(predict_rating(20, neighbors, ratings), 13 / 3)
         self.assertIsNone(predict_rating(21, neighbors, ratings))
 
+    def test_weighted_prediction_stays_within_observed_rating_bounds(self):
+        neighbors = (Neighbor(2, 1.0, 1), Neighbor(3, 0.982, 1), Neighbor(4, 0.9701, 1))
+        ratings = {neighbor.user_id: {20: 5} for neighbor in neighbors}
+        self.assertEqual(predict_rating(20, neighbors, ratings), 5.0)
+
 
 class RecommendationTests(unittest.TestCase):
     def test_fixture_produces_deterministic_top_n_and_hand_calculated_scores(self):

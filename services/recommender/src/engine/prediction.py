@@ -16,4 +16,7 @@ def predict_rating(
     weight_sum = fsum(similarity for similarity, _ in usable)
     if weight_sum == 0:
         return None
-    return fsum(similarity * rating for similarity, rating in usable) / weight_sum
+    weighted_average = fsum(similarity * rating for similarity, rating in usable) / weight_sum
+    observed_ratings = [rating for _, rating in usable]
+    # Positive weighted means stay within observed bounds; clamp float rounding drift.
+    return min(max(observed_ratings), max(min(observed_ratings), weighted_average))

@@ -187,7 +187,7 @@ type ClaimedJobRow = {
   timeoutAt: Date;
 };
 
-export async function claimRecommendationJob(workerId: string) {
+export async function claimRecommendationJob(workerId: string, engineVersion = RECOMMENDATION_ENGINE_VERSION) {
   return prisma.$transaction(async (tx) => {
     const now = new Date();
     await tx.$executeRaw(Prisma.sql`
@@ -206,9 +206,10 @@ export async function claimRecommendationJob(workerId: string) {
         SELECT job."id"
         FROM "RecommendationJob" AS job
         WHERE (
-          job."status" = 'PENDING' AND job."attemptCount" < job."maxAttempts" AND job."nextAttemptAt" <= ${now}
+          job."status" = 'PENDING' AND job."engineVersion" = ${engineVersion} AND
+          job."attemptCount" < job."maxAttempts" AND job."nextAttemptAt" <= ${now}
         ) OR (
-          job."status" = 'RUNNING' AND job."attemptCount" < job."maxAttempts" AND
+          job."status" = 'RUNNING' AND job."engineVersion" = ${engineVersion} AND job."attemptCount" < job."maxAttempts" AND
           (job."leaseExpiresAt" <= ${now} OR job."timeoutAt" <= ${now})
         )
         ORDER BY job."createdAt" ASC, job."id" ASC

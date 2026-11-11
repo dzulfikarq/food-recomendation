@@ -94,6 +94,8 @@ test("recommendation jobs enforce auth, atomic leases, retries, immutable snapsh
     const reusedKey = await api("/api/admin/recommendation-jobs", "POST", { ...createPayload, topN: 2 }, { cookie: adminCookie });
     assert.equal(reusedKey.status, 409);
 
+    const incompatibleWorker = await workerApi("/api/internal/recommendation-jobs/claim", "POST", { workerId: "old-engine", engineVersion: "unsupported-engine" }, "old-engine");
+    assert.equal(incompatibleWorker.status, 204);
     const [claimA, claimB] = await Promise.all([
       workerApi("/api/internal/recommendation-jobs/claim", "POST", { workerId: "worker-a" }, "worker-a"),
       workerApi("/api/internal/recommendation-jobs/claim", "POST", { workerId: "worker-b" }, "worker-b")

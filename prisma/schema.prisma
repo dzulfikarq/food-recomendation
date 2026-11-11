@@ -141,6 +141,13 @@ model Rating {
   @@index([foodId])
 }
 
+model RatingDatasetState {
+  id                       Int       @id @default(1)
+  currentRevision          BigInt    @default(0)
+  processedRevision        BigInt    @default(0)
+  lastRatingChangedAt      DateTime?
+}
+
 model FoodImport {
   id           Int             @id @default(autoincrement())
   adminId      Int
@@ -164,6 +171,7 @@ model DatasetExport {
   fileChecksum String   @db.VarChar(64)
   rowCount     Int
   filePath     String   @db.Text
+  ratingRevision BigInt @default(0)
   createdAt    DateTime @default(now())
   admin        User     @relation("DatasetExportAdmin", fields: [adminId], references: [id], onDelete: Restrict)
   batches      RecommendationBatch[]

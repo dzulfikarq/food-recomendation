@@ -57,6 +57,7 @@ test("USER rating lifecycle, private rating history, and ADMIN dataset CSV snaps
       origin: "Indonesia"
     } });
     foodId = food.id;
+    const initialRevision = (await prisma.ratingDatasetState.findUniqueOrThrow({ where: { id: 1 } })).currentRevision;
     const baselineRatingCount = await prisma.rating.count();
     const catalogBefore = await page(`/foods?search=${encodeURIComponent(food.foodCode)}`, userCookie);
     assert.equal(catalogBefore.status, 200);
@@ -75,15 +76,20 @@ test("USER rating lifecycle, private rating history, and ADMIN dataset CSV snaps
 
     const firstRating = await api(`/api/foods/${food.id}/rating`, "PUT", { rating: 5 }, userCookie);
     assert.equal(firstRating.status, 200, await firstRating.clone().text());
+    assert.equal((await prisma.ratingDatasetState.findUniqueOrThrow({ where: { id: 1 } })).currentRevision, initialRevision + BigInt(1));
     const firstUsedAt = (await prisma.food.findUniqueOrThrow({ where: { id: food.id } })).firstUsedAt;
     assert.ok(firstUsedAt);
     assert.equal(await prisma.rating.count({ where: { userId, foodId: food.id } }), 1);
 
     const updatedRating = await api(`/api/foods/${food.id}/rating`, "PUT", { rating: 3 }, userCookie);
     assert.equal(updatedRating.status, 200);
+    assert.equal((await prisma.ratingDatasetState.findUniqueOrThrow({ where: { id: 1 } })).currentRevision, initialRevision + BigInt(2));
     assert.equal(await prisma.rating.count({ where: { userId, foodId: food.id } }), 1);
     assert.equal((await prisma.rating.findFirstOrThrow({ where: { userId, foodId: food.id } })).rating, 3);
     assert.equal((await prisma.food.findUniqueOrThrow({ where: { id: food.id } })).firstUsedAt?.getTime(), firstUsedAt.getTime());
+    const unchangedRating = await api(`/api/foods/${food.id}/rating`, "PUT", { rating: 3 }, userCookie);
+    assert.equal(unchangedRating.status, 200);
+    assert.equal((await prisma.ratingDatasetState.findUniqueOrThrow({ where: { id: 1 } })).currentRevision, initialRevision + BigInt(2));
     const catalogAfter = await page(`/foods?search=${encodeURIComponent(food.foodCode)}`, userCookie);
     assert.match(await catalogAfter.text(), /1 dari \d+ makanan aktif dinilai/);
     const home = await page("/", userCookie);
@@ -107,10 +113,16 @@ test("USER rating lifecycle, private rating history, and ADMIN dataset CSV snaps
     assert.equal((await page("/admin/ratings", adminCookie)).status, 200);
     assert.equal((await api("/api/admin/rating-datasets", "GET", undefined, adminCookie)).status, 200);
 
-    const exportResponse = await api("/api/admin/rating-datasets", "POST", undefined, adminCookie);
+    const snapshotRevision = (await prisma.ratingDatasetState.findUniqueOrThrow({ where: { id: 1 } })).currentRevision;
+    const [exportResponse, concurrentUpdate] = await Promise.all([
+      api("/api/admin/rating-datasets", "POST", undefined, adminCookie),
+      api(`/api/foods/${food.id}/rating`, "PUT", { rating: 2 }, userCookie)
+    ]);
+    assert.equal(concurrentUpdate.status, 200);
     assert.equal(exportResponse.status, 201, await exportResponse.clone().text());
     const datasetExport = (await exportResponse.json()).data;
     assert.equal(datasetExport.rowCount, baselineRatingCount + 1);
+    assert.ok([snapshotRevision, snapshotRevision + BigInt(1)].map(String).includes(datasetExport.ratingRevision));
     assert.equal("filePath" in datasetExport, false);
     const filteredSnapshots = await page(`/admin/ratings?search=${encodeURIComponent(datasetExport.filename)}&page=999999`, adminCookie);
     assert.equal(filteredSnapshots.status, 200);
@@ -123,7 +135,9 @@ test("USER rating lifecycle, private rating history, and ADMIN dataset CSV snaps
     assert.equal(download.status, 200);
     const csv = await download.text();
     assert.match(csv, /^user_id,food_id,rating\r\n/);
-    assert.match(csv, new RegExp(`^${user.id},${food.id},3\\r?$`, "m"));
+    const snapshotValue = new RegExp(`^${user.id},${food.id},(\\d+)\\r?$`, "m").exec(csv)?.[1];
+    assert.ok(["2", "3"].includes(snapshotValue ?? ""));
+    assert.equal(datasetExport.ratingRevision, String(snapshotValue === "2" ? snapshotRevision + BigInt(1) : snapshotRevision));
     assert.equal(csv.includes(email), false);
 
     const userDownload = await api(`/api/admin/rating-datasets/${datasetExport.id}/download`, "GET", undefined, userCookie);

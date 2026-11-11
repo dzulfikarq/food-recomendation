@@ -24,7 +24,10 @@ export async function POST(request: Request) {
 
   try {
     const datasetExport = await createRatingDatasetExport(adminId);
-    return Response.json({ data: datasetExport, message: "Snapshot dataset rating berhasil dibuat." }, { status: 201 });
+    return Response.json({
+      data: { ...datasetExport, ratingRevision: datasetExport.ratingRevision.toString() },
+      message: "Snapshot dataset rating berhasil dibuat."
+    }, { status: 201 });
   } catch (error) {
     if (error instanceof EmptyRatingDatasetError) return apiError(409, "NO_RATINGS_TO_EXPORT", error.message);
     return apiError(500, "DATASET_EXPORT_FAILED", "Snapshot dataset rating tidak dapat dibuat.");

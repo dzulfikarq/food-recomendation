@@ -1,12 +1,17 @@
 import { createHash, randomUUID } from "node:crypto";
+import { Prisma } from "@/generated/prisma/client";
 import { prisma } from "@/lib/prisma";
 import { removeRatingExport, saveRatingExport } from "@/lib/food/storage";
 
 export class EmptyRatingDatasetError extends Error {}
 
-export async function createRatingDatasetExport(adminId: number) {
+export async function createRatingDatasetExportInTransaction(tx: Prisma.TransactionClient, adminId: number) {
+  const state = await tx.$queryRaw<Array<{ currentRevision: bigint }>>`
+    SELECT "currentRevision" FROM "RatingDatasetState" WHERE "id" = 1 FOR UPDATE
+  `;
+  if (!state[0]) throw new Error("Rating dataset state is missing.");
   // ponytail: buffers one rating snapshot in memory; switch to cursor streaming if export sizes grow materially.
-  const ratings = await prisma.rating.findMany({
+  const ratings = await tx.rating.findMany({
     select: { userId: true, foodId: true, rating: true },
     orderBy: [{ userId: "asc" }, { foodId: "asc" }]
   });
@@ -21,13 +26,28 @@ export async function createRatingDatasetExport(adminId: number) {
   const filename = `foodrec-ratings-${timestamp}-${randomUUID().slice(0, 8)}.csv`;
 
   try {
-    const record = await prisma.datasetExport.create({
-      data: { adminId, filename, fileChecksum, rowCount: ratings.length, filePath: stagingKey },
-      select: { id: true, filename: true, fileChecksum: true, rowCount: true, createdAt: true }
+    const record = await tx.datasetExport.create({
+      data: { adminId, filename, fileChecksum, rowCount: ratings.length, filePath: stagingKey, ratingRevision: state[0].currentRevision },
+      select: { id: true, filename: true, fileChecksum: true, rowCount: true, ratingRevision: true, createdAt: true }
     });
-    return record;
+    return { record, stagingKey };
   } catch (error) {
     await removeRatingExport(stagingKey).catch(() => undefined);
+    throw error;
+  }
+}
+
+export async function createRatingDatasetExport(adminId: number) {
+  let stagingKey: string | undefined;
+  try {
+    const result = await prisma.$transaction(async (tx) => {
+      const snapshot = await createRatingDatasetExportInTransaction(tx, adminId);
+      stagingKey = snapshot.stagingKey;
+      return snapshot.record;
+    });
+    return result;
+  } catch (error) {
+    if (stagingKey) await removeRatingExport(stagingKey).catch(() => undefined);
     throw error;
   }
 }

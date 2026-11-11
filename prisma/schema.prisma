@@ -148,6 +148,18 @@ model RatingDatasetState {
   lastRatingChangedAt      DateTime?
 }
 
+model RecommendationEngineConfig {
+  id                             Int       @id @default(1)
+  autoProcessingEnabled          Boolean   @default(false)
+  automaticPublicationEnabled    Boolean   @default(false)
+  kNeighbors                     Int       @default(3)
+  topN                           Int       @default(5)
+  scheduleIntervalMinutes        Int       @default(30)
+  engineVersion                  String    @default("python-ubcf-v1") @db.VarChar(40)
+  lastSuccessfulProcessingAt     DateTime?
+  validationStatus               String    @default("PENDING_VALIDATION") @db.VarChar(40)
+}
+
 model FoodImport {
   id           Int             @id @default(autoincrement())
   adminId      Int

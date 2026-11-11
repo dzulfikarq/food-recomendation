@@ -2,8 +2,10 @@ import "dotenv/config";
 import { hashPassword } from "better-auth/crypto";
 import { prisma } from "@/lib/prisma";
 import { readApplicationEnvironment } from "@/lib/env";
+import { assertSeedTarget } from "@/prisma/assert-seed-target";
 
 async function main() {
+  assertSeedTarget();
   const { ADMIN_EMAIL, ADMIN_PASSWORD } = readApplicationEnvironment();
   if (!ADMIN_EMAIL || !ADMIN_PASSWORD) {
     throw new Error("Set ADMIN_EMAIL and ADMIN_PASSWORD in .env before provisioning the administrator.");

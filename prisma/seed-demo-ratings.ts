@@ -10,8 +10,12 @@ const users = Array.from({ length: 20 }, (_, index) => {
 async function main() {
   const url = new URL(readDatabaseUrl());
   const database = decodeURIComponent(url.pathname.replace(/^\//, ""));
+  if (!process.env.FOODREC_TEST_DATABASE_URL || process.env.FOODREC_TEST_DATABASE_URL !== readDatabaseUrl() ||
+      !["localhost", "127.0.0.1", "[::1]"].includes(url.hostname) || !database.endsWith("_test") || process.env.NODE_ENV === "production") {
+    throw new Error("Demo ratings seed requires an explicit local _test database and refuses production.");
+  }
   if (!(["localhost", "127.0.0.1", "[::1]"].includes(url.hostname) && /^foodrec(?:_test)?$/.test(database))) {
-    throw new Error("Demo ratings seed only runs against local `foodrec` or `foodrec_test` databases.");
+    throw new Error("Demo ratings seed only runs against local `foodrec_test`.");
   }
 
   const result = await prisma.$transaction(async (tx) => {

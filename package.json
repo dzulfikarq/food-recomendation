@@ -7,7 +7,7 @@
     "build": "prisma generate && next build",
     "start": "next start",
     "lint": "eslint app components lib prisma tests scripts next.config.ts prisma.config.ts playwright.config.ts eslint.config.mjs postcss.config.mjs",
-    "test": "tsx --test tests/auth.test.ts tests/food-csv.test.ts tests/public-food-query.test.ts tests/recommendation-csv.test.ts",
+    "test": "tsx --test tests/auth.test.ts tests/database-isolation.test.ts tests/food-csv.test.ts tests/public-food-query.test.ts tests/recommendation-csv.test.ts scripts/test-database.test.mjs",
     "test:e2e": "node scripts/test-e2e.mjs",
     "test:integration": "node scripts/test-integration.mjs",
     "typecheck": "tsc --noEmit",

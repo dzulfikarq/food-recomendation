@@ -1,8 +1,10 @@
 import "dotenv/config";
 import { prisma } from "@/lib/prisma";
 import { initialFoodCatalog } from "@/prisma/food-catalog";
+import { assertSeedTarget } from "@/prisma/assert-seed-target";
 
 async function main() {
+  assertSeedTarget();
   const result = await prisma.food.createMany({ data: initialFoodCatalog, skipDuplicates: true });
   console.info(`Food catalog seed complete: ${result.count} new food records; existing Food Codes were left unchanged.`);
 }

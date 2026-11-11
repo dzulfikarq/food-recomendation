@@ -4,6 +4,8 @@
 
 **Rekomendasi untuk dibawa ke pembimbing:** gunakan explicit-rating User-Based Collaborative Filtering (UBCF) sebagai metode utama, karena FoodRec meminta rating preferensi 1–5. Ini belum menjadi keputusan penelitian yang disetujui dan bukan izin mengubah production engine. Python explicit-rating hanya kandidat implementasi. Pemilik metodologi—peneliti dan pembimbing—harus mengesahkan definisi rating, rumus, protokol evaluasi, serta ambang penerimaan.
 
+Versi ringkas yang ditujukan untuk tinjauan dosen pembimbing tersedia di [`RESEARCH_METHODOLOGY_PROPOSAL.md`](RESEARCH_METHODOLOGY_PROPOSAL.md); dokumen ini menyimpan detail keputusan dan acceptance criteria FoodRec.
+
 Jangan menyamakan model ini dengan operator Altair Item Recommendation yang diaudit. Source publik mengindikasikan operator tersebut memakai implicit/binary interaction; binary diagnostic cocok pada set skor maksimum native, tetapi source belum dikaitkan dengan extension runtime. Mathematical parity tetap **PENDING VALIDATION**. Auto-processing dan automatic publication tetap **OFF**; artifact tetap **UNVERIFIED**.
 
 ## Audit PRD dan dokumen penelitian

@@ -25,7 +25,12 @@ export default async function AdminRatingsPage({ searchParams }: { searchParams:
     if (Number.isSafeInteger(id) && id > 0) matches.push({ id });
     where.OR = matches;
   }
-  const [ratingCount, exportCount] = await Promise.all([prisma.rating.count(), prisma.datasetExport.count({ where })]);
+  const [accountRatingCount, historicalRatingCount, exportCount] = await Promise.all([
+    prisma.rating.count(),
+    prisma.historicalRating.count({ where: { catalogImport: { isActive: true } } }),
+    prisma.datasetExport.count({ where })
+  ]);
+  const ratingCount = accountRatingCount + historicalRatingCount;
   const totalPages = Math.max(1, Math.ceil(exportCount / PAGE_SIZE));
   const page = Math.min(requestedPage, totalPages);
   const exports = await prisma.datasetExport.findMany({
@@ -47,7 +52,7 @@ export default async function AdminRatingsPage({ searchParams }: { searchParams:
       <PageHeader eyebrow="DATA RATING" title="Data Rating" description="Buat snapshot dataset rating untuk diproses manual di Altair AI Studio Educational 2026.1.1." />
       <Card className="p-5 sm:p-7">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div><div className="flex items-center gap-2"><span className="grid size-10 place-items-center rounded-xl bg-soft text-primary"><BarChart3 size={19} aria-hidden="true" /></span><h2 className="m-0 text-lg font-bold text-gray-950">Snapshot dataset</h2></div><p className="mb-0 mt-3 text-sm text-secondary">{ratingCount} rating tersimpan pada PostgreSQL. CSV hanya memuat `user_id`, `food_id`, dan `rating`—tanpa informasi personal.</p></div>
+          <div><div className="flex items-center gap-2"><span className="grid size-10 place-items-center rounded-xl bg-soft text-primary"><BarChart3 size={19} aria-hidden="true" /></span><h2 className="m-0 text-lg font-bold text-gray-950">Snapshot dataset</h2></div><p className="mb-0 mt-3 text-sm text-secondary">{ratingCount} rating · {accountRatingCount} akun FoodRec + {historicalRatingCount} historis Food.com. CSV memakai ID akun positif dan ID historis negatif; tanpa nama atau email.</p></div>
           <CreateDatasetExport ratingCount={ratingCount} />
         </div>
       </Card>

@@ -20,6 +20,7 @@ export type JobParameters = {
   minCommonRatings: number;
   similarityStrategy: "overlap";
   activeFoodIds: number[];
+  targetUserIds?: number[];
 };
 
 export type JobRecommendation = {
@@ -44,13 +45,18 @@ function parametersFrom(value: Prisma.JsonValue): JobParameters {
     throw new RecommendationJobError("INVALID_JOB_PARAMETERS", 500, "Job parameters are invalid.");
   }
   const parameters = value as Record<string, Prisma.JsonValue>;
-  const { kNeighbors, topN, minCommonRatings, similarityStrategy, activeFoodIds } = parameters;
+  const { kNeighbors, topN, minCommonRatings, similarityStrategy, activeFoodIds, targetUserIds } = parameters;
   if (
     !Number.isSafeInteger(kNeighbors) || (kNeighbors as number) < 1 || (kNeighbors as number) > 100 ||
     !Number.isSafeInteger(topN) || (topN as number) < 1 || (topN as number) > 100 ||
     !Number.isSafeInteger(minCommonRatings) || (minCommonRatings as number) < 1 ||
     similarityStrategy !== "overlap" || !Array.isArray(activeFoodIds) || activeFoodIds.length > MAX_ACTIVE_FOODS ||
-    activeFoodIds.some((foodId) => !Number.isSafeInteger(foodId) || (foodId as number) < 1)
+    activeFoodIds.some((foodId) => !Number.isSafeInteger(foodId) || (foodId as number) < 1) ||
+    (targetUserIds !== undefined && (
+      !Array.isArray(targetUserIds) || targetUserIds.length > MAX_JOB_RESULT_ROWS ||
+      targetUserIds.some((userId) => !Number.isSafeInteger(userId) || (userId as number) < 1) ||
+      new Set(targetUserIds).size !== targetUserIds.length
+    ))
   ) {
     throw new RecommendationJobError("INVALID_JOB_PARAMETERS", 500, "Job parameters are invalid.");
   }
@@ -59,7 +65,8 @@ function parametersFrom(value: Prisma.JsonValue): JobParameters {
     topN: topN as number,
     minCommonRatings: minCommonRatings as number,
     similarityStrategy,
-    activeFoodIds: activeFoodIds as number[]
+    activeFoodIds: activeFoodIds as number[],
+    ...(targetUserIds === undefined ? {} : { targetUserIds: targetUserIds as number[] })
   };
 }
 
@@ -121,9 +128,25 @@ export async function createRecommendationJob(input: {
   const dataset = await prisma.datasetExport.findUnique({ where: { id: input.datasetExportId } });
   if (!dataset) throw new RecommendationJobError("DATASET_NOT_FOUND", 404, "Rating snapshot not found.");
   await verifySnapshot(dataset);
-  const activeFoods = await prisma.food.findMany({ where: { isActive: true }, orderBy: { id: "asc" }, take: MAX_ACTIVE_FOODS + 1, select: { id: true } });
+  const activeCatalog = await prisma.foodCatalogImport.findFirst({ where: { sourceDataset: "FOODCOM", isActive: true }, select: { id: true } });
+  const activeFoods = await prisma.food.findMany({
+    where: activeCatalog ? { isActive: true, sourceDataset: "FOODCOM", sourceImportId: activeCatalog.id } : { isActive: true },
+    orderBy: { id: "asc" }, take: MAX_ACTIVE_FOODS + 1, select: { id: true }
+  });
   if (activeFoods.length > MAX_ACTIVE_FOODS) {
     throw new RecommendationJobError("ACTIVE_FOOD_LIMIT", 422, "Active food catalog exceeds worker limit.");
+  }
+  const maxTargetUsers = Math.floor(MAX_JOB_RESULT_ROWS / input.topN);
+  const targetRatings = await prisma.$queryRaw<Array<{ userId: number }>>(Prisma.sql`
+    SELECT DISTINCT rating."userId"
+    FROM "Rating" AS rating
+    JOIN "User" AS account ON account."id" = rating."userId"
+    WHERE account."role" = 'USER'
+    ORDER BY rating."userId" ASC
+    LIMIT ${maxTargetUsers + 1}
+  `);
+  if (targetRatings.length > maxTargetUsers) {
+    throw new RecommendationJobError("TARGET_USER_LIMIT", 422, "Rated FoodRec users and Top-N exceed worker result limit.");
   }
 
   const parameters: JobParameters = {
@@ -131,7 +154,8 @@ export async function createRecommendationJob(input: {
     topN: input.topN,
     minCommonRatings: 1,
     similarityStrategy: "overlap",
-    activeFoodIds: activeFoods.map(({ id }) => id)
+    activeFoodIds: activeFoods.map(({ id }) => id),
+    targetUserIds: targetRatings.map(({ userId }) => userId)
   };
   try {
     const job = await prisma.recommendationJob.create({
@@ -316,11 +340,12 @@ function validateRecommendations(
   const usersWithRatings = new Set(sourceRatings.map(({ userId }) => userId));
   const ratedPairs = new Set(sourceRatings.map(({ userId, foodId }) => `${userId}:${foodId}`));
   const activeFoods = new Set(parameters.activeFoodIds);
+  const targetUsers = parameters.targetUserIds ? new Set(parameters.targetUserIds) : null;
   const keys = new Set<string>();
   const ranksByUser = new Map<number, Set<number>>();
   for (const item of recommendations) {
     if (
-      !usersWithRatings.has(item.userId) || !activeFoods.has(item.foodId) ||
+      item.userId < 1 || !usersWithRatings.has(item.userId) || (targetUsers && !targetUsers.has(item.userId)) || !activeFoods.has(item.foodId) ||
       ratedPairs.has(`${item.userId}:${item.foodId}`) || item.rank > parameters.topN ||
       item.predictedRating < 1 || item.predictedRating > 5
     ) throw new RecommendationJobError("RESULT_INVALID", 422, "Worker result violates snapshot or parameter constraints.");

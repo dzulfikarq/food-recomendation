@@ -19,9 +19,10 @@ export function readTestDatabaseTarget(variable, sourceUrl = process.env.DATABAS
   if (!["localhost", "127.0.0.1", "[::1]"].includes(target.hostname)) {
     throw new Error(`${variable} must use a local PostgreSQL server; remote targets are refused.`);
   }
-  const companionVariable = variable === "FOODREC_TEST_DATABASE_URL" ? "FOODREC_E2E_DATABASE_URL" : "FOODREC_TEST_DATABASE_URL";
-  const companion = process.env[companionVariable];
-  if (companion) {
+  const testVariables = ["FOODREC_TEST_DATABASE_URL", "FOODREC_E2E_DATABASE_URL", "FOODREC_FOODCOM_E2E_DATABASE_URL"];
+  for (const companionVariable of testVariables.filter((name) => name !== variable)) {
+    const companion = process.env[companionVariable];
+    if (!companion) continue;
     const other = new URL(companion);
     if (target.hostname === other.hostname && target.port === other.port && target.username === other.username &&
         target.password === other.password && databaseName === decodeURIComponent(other.pathname.replace(/^\//, ""))) {

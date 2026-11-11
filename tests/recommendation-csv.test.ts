@@ -34,12 +34,13 @@ test("recommendation CSV rejects duplicate pairs, duplicate ranks, gaps, and row
   assert.ok(overTopN.errors.some(({ message }) => message.includes("Top-N")));
 });
 
-test("rating snapshot parser checks exact contract, positive IDs, unique pairs, and metadata row count", () => {
-  const valid = parseRatingSnapshotCsv(Buffer.from("user_id,food_id,rating\n1,10,5\n2,11,3\n"), 2);
+test("rating snapshot parser checks exact contract, namespaced IDs, unique pairs, and metadata row count", () => {
+  const valid = parseRatingSnapshotCsv(Buffer.from("user_id,food_id,rating\n1,10,5\n-7001,11,3\n"), 2);
   assert.deepEqual(valid.errors, []);
   assert.equal(valid.rows.length, 2);
+  assert.deepEqual(valid.rows.map(({ userId }) => userId), [1, -7001]);
 
-  const invalid = parseRatingSnapshotCsv(Buffer.from("user_id,food_id,rating\n1,10,5\n1,10,4\n0,11,6\n"), 3);
+  const invalid = parseRatingSnapshotCsv(Buffer.from("user_id,food_id,rating\n1,10,5\n1,10,4\n0,11,6\n-9007199254740992,12,3\n"), 4);
   assert.ok(invalid.errors.some(({ message }) => message.includes("duplikat")));
   assert.ok(invalid.errors.some(({ field }) => field === "user_id"));
   assert.ok(invalid.errors.some(({ field }) => field === "rating"));

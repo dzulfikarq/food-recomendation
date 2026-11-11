@@ -25,6 +25,7 @@ MAX_SNAPSHOT_BYTES = 20 * 1024 * 1024
 MAX_RESULT_BYTES = 2 * 1024 * 1024
 MAX_RESULT_ROWS = 10_000
 MAX_ACTIVE_FOODS = 10_000
+MAX_SAFE_USER_ID = 9_007_199_254_740_991
 LOG = logging.getLogger("foodrec.worker")
 
 
@@ -42,6 +43,7 @@ def validate_parameters(value: object) -> dict[str, object]:
     top_n = value.get("topN")
     min_common_ratings = value.get("minCommonRatings")
     active_food_ids = value.get("activeFoodIds")
+    target_user_ids = value.get("targetUserIds")
     if (
         value.get("similarityStrategy") != "overlap"
         or type(k_neighbors) is not int
@@ -54,6 +56,15 @@ def validate_parameters(value: object) -> dict[str, object]:
         or len(active_food_ids) > MAX_ACTIVE_FOODS
         or any(type(food_id) is not int or food_id < 1 for food_id in active_food_ids)
         or len(set(active_food_ids)) != len(active_food_ids)
+        or (
+            target_user_ids is not None
+            and (
+                not isinstance(target_user_ids, list)
+                or len(target_user_ids) > MAX_RESULT_ROWS
+                or any(type(user_id) is not int or user_id < 1 for user_id in target_user_ids)
+                or len(set(target_user_ids)) != len(target_user_ids)
+            )
+        )
     ):
         raise WorkerError("INVALID_JOB_PARAMETERS", retryable=False)
     return {
@@ -62,6 +73,7 @@ def validate_parameters(value: object) -> dict[str, object]:
         "minCommonRatings": min_common_ratings,
         "similarityStrategy": "overlap",
         "activeFoodIds": active_food_ids,
+        "targetUserIds": target_user_ids,
     }
 
 
@@ -80,8 +92,17 @@ def parse_snapshot(buffer: bytes, expected_checksum: str, expected_rows: int) ->
         for row in reader:
             if None in row or any(row.get(key) is None for key in ("user_id", "food_id", "rating")):
                 raise WorkerError("SNAPSHOT_INVALID", retryable=False)
-            user_id, food_id, rating = (int(row[key]) for key in ("user_id", "food_id", "rating"))
-            if user_id < 1 or food_id < 1 or not 1 <= rating <= 5:
+            raw_user_id = row["user_id"]
+            user_digits = raw_user_id[1:] if raw_user_id.startswith("-") else raw_user_id
+            if (
+                not user_digits.isascii() or not user_digits.isdigit() or user_digits.startswith("0")
+                or raw_user_id == "-0" or int(user_digits) > MAX_SAFE_USER_ID
+                or not row["food_id"].isascii() or not row["food_id"].isdigit()
+                or row["food_id"].startswith("0") or row["rating"] not in {"1", "2", "3", "4", "5"}
+            ):
+                raise WorkerError("SNAPSHOT_INVALID", retryable=False)
+            user_id, food_id, rating = int(raw_user_id), int(row["food_id"]), int(row["rating"])
+            if user_id == 0 or food_id < 1:
                 raise WorkerError("SNAPSHOT_INVALID", retryable=False)
             user_ratings = ratings.setdefault(user_id, {})
             if food_id in user_ratings:
@@ -100,7 +121,11 @@ def parse_snapshot(buffer: bytes, expected_checksum: str, expected_rows: int) ->
 def compute_result(ratings: Mapping[int, Mapping[int, int]], raw_parameters: object) -> dict[str, list[dict[str, int | float]]]:
     parameters = validate_parameters(raw_parameters)
     rows: list[dict[str, int | float]] = []
-    for user_id in sorted(ratings):
+    target_users = parameters["targetUserIds"]
+    targets = target_users if target_users is not None else (user_id for user_id in ratings if user_id > 0)
+    for user_id in sorted(targets):
+        if user_id not in ratings:
+            continue
         result = recommend_for_user(
             user_id,
             ratings,

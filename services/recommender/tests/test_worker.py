@@ -19,6 +19,19 @@ class WorkerSnapshotTests(unittest.TestCase):
         with self.assertRaisesRegex(WorkerError, "SNAPSHOT_INVALID"):
             parse_snapshot(snapshot, hashlib.sha256(snapshot).hexdigest(), 3)
 
+    def test_snapshot_accepts_negative_historical_namespace_without_merging_accounts(self):
+        snapshot = b"user_id,food_id,rating\r\n1,101,5\r\n-7001,101,5\r\n-7001,102,4\r\n"
+        ratings = parse_snapshot(snapshot, hashlib.sha256(snapshot).hexdigest(), 3)
+        self.assertIn(1, ratings)
+        self.assertIn(-7001, ratings)
+        self.assertNotIn(7001, ratings)
+
+    def test_snapshot_rejects_noncanonical_or_unsafe_user_ids(self):
+        for user_id in ("0", "-0", "01", "-01", "9007199254740992", "-9007199254740992", "+1"):
+            snapshot = f"user_id,food_id,rating\n{user_id},101,5\n".encode()
+            with self.subTest(user_id=user_id), self.assertRaisesRegex(WorkerError, "SNAPSHOT_INVALID"):
+                parse_snapshot(snapshot, hashlib.sha256(snapshot).hexdigest(), 1)
+
     def test_snapshot_rejects_duplicate_pairs_and_invalid_rating(self):
         duplicate = b"user_id,food_id,rating\n1,101,5\n1,101,4\n"
         invalid_rating = b"user_id,food_id,rating\n1,101,6\n"
@@ -44,6 +57,33 @@ class WorkerEngineTests(unittest.TestCase):
             self.assertIn(row["foodId"], parameters["activeFoodIds"])
         with self.assertRaisesRegex(WorkerError, "INVALID_JOB_PARAMETERS"):
             validate_parameters({**parameters, "similarityStrategy": "zero_filled"})
+
+    def test_historical_users_are_neighbors_but_never_recommendation_targets(self):
+        ratings = {1: {101: 5}, -7001: {101: 5, 102: 4}}
+        parameters = {
+            "kNeighbors": 1,
+            "topN": 1,
+            "minCommonRatings": 1,
+            "similarityStrategy": "overlap",
+            "activeFoodIds": [101, 102],
+            "targetUserIds": [1],
+        }
+        result = compute_result(ratings, parameters)
+        self.assertEqual(result["recommendations"], [{"userId": 1, "foodId": 102, "rank": 1, "predictedRating": 4.0}])
+        with self.assertRaisesRegex(WorkerError, "INVALID_JOB_PARAMETERS"):
+            validate_parameters({**parameters, "targetUserIds": [-7001]})
+
+    def test_legacy_job_without_target_list_still_excludes_historical_users(self):
+        ratings = {1: {101: 5}, -7001: {101: 5, 102: 4}}
+        parameters = {
+            "kNeighbors": 1,
+            "topN": 1,
+            "minCommonRatings": 1,
+            "similarityStrategy": "overlap",
+            "activeFoodIds": [101, 102],
+        }
+        result = compute_result(ratings, parameters)
+        self.assertEqual(result["recommendations"], [{"userId": 1, "foodId": 102, "rank": 1, "predictedRating": 4.0}])
 
     def test_engine_runs_in_terminable_child_process(self):
         ratings = {1: {101: 5}, 2: {101: 5, 102: 4}}

@@ -23,6 +23,12 @@ function positiveInteger(value: string) {
   return Number.isSafeInteger(number) && number > 0 ? number : null;
 }
 
+function snapshotUserInteger(value: string) {
+  if (!/^-?\d+$/.test(value)) return null;
+  const number = Number(value);
+  return Number.isSafeInteger(number) && number !== 0 ? number : null;
+}
+
 function lineOf(record: CsvRecord, fallback: number) {
   return record.info?.lines && record.info.lines > 0 ? record.info.lines : fallback;
 }
@@ -113,7 +119,8 @@ export function parseRatingSnapshotCsv(buffer: Buffer, expectedRows: number) {
       continue;
     }
     const [rawUserId, rawFoodId, rawRating] = record.record;
-    const userId = positiveInteger(rawUserId!);
+    // Negative IDs namespace pseudonymous Food.com users away from positive FoodRec account IDs.
+    const userId = snapshotUserInteger(rawUserId!);
     const foodId = positiveInteger(rawFoodId!);
     const rating = positiveInteger(rawRating!);
     if (!userId) errors.push({ row: line, field: "user_id", message: "ID user snapshot tidak valid." });

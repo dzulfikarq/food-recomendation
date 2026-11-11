@@ -1,6 +1,7 @@
 import { defineConfig } from "@playwright/test";
 
 const baseURL = process.env.AUTH_URL ?? "http://127.0.0.1:3110";
+const port = process.env.FOODREC_E2E_PORT ?? "3110";
 const node = process.execPath.includes(" ") ? `"${process.execPath}"` : process.execPath;
 
 export default defineConfig({
@@ -11,7 +12,7 @@ export default defineConfig({
   timeout: 120_000,
   expect: { timeout: 15_000 },
   reporter: "list",
-  outputDir: "test-results/phase-f",
+  outputDir: process.env.FOODREC_E2E_OUTPUT_DIR ?? "test-results/phase-f",
   use: {
     baseURL,
     browserName: "chromium",
@@ -21,7 +22,7 @@ export default defineConfig({
     trace: "retain-on-failure"
   },
   webServer: {
-    command: `${node} node_modules/next/dist/bin/next start --hostname 127.0.0.1 --port 3110`,
+    command: `${node} node_modules/next/dist/bin/next start --hostname 127.0.0.1 --port ${port}`,
     url: baseURL,
     reuseExistingServer: false,
     timeout: 120_000

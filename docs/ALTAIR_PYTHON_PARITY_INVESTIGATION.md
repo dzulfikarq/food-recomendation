@@ -36,17 +36,55 @@ Relevant implementation: `services/recommender/src/engine/{similarity.py,user_kn
 Inspected public repository [`matmih/Recommender-extension`](https://github.com/matmih/Recommender-extension) at commit [`3d89c7dbe247ca2db4c4d49cf6189d4467872bcd`](https://github.com/matmih/Recommender-extension/commit/3d89c7dbe247ca2db4c4d49cf6189d4467872bcd), dated 2013-06-29. GitHub exposes no tags/releases; [`build.properties`](https://github.com/matmih/Recommender-extension/blob/3d89c7dbe247ca2db4c4d49cf6189d4467872bcd/Recommender%20Extension%20source/build.properties) says `extension.version=5`, while `build.xml` requires RapidMiner 5.0. Neither identifies compatibility value `5.1.002` or the installed binary. This pins the inspected source, **not** the binary installed for the native run.
 
 - [`UserKnn.java`](https://github.com/matmih/Recommender-extension/blob/3d89c7dbe247ca2db4c4d49cf6189d4467872bcd/Recommender%20Extension%20source/src/com/rapidminer/ItemRecommendation/UserKnn.java) builds `PosOnlyFeedback` from user and item IDs. The loop does not read numeric `rating` values. With `Weighted Knn=false`, it instantiates `_userKnn`; true selects `WeightedUserKnn`.
-- [`_userKnn.java`](https://github.com/matmih/Recommender-extension/blob/3d89c7dbe247ca2db4c4d49cf6189d4467872bcd/Recommender%20Extension%20source/src/com/rapidminer/ItemRecommendation/_userKnn.java) trains with `BinaryCosine`. Its prediction is `count(selected neighbors that interacted with item) / k`; this is binary neighbor support, not an average of numeric ratings. Items with no supporting neighbor can still receive score zero.
-- [`BinaryCosine.java`](https://github.com/matmih/Recommender-extension/blob/3d89c7dbe247ca2db4c4d49cf6189d4467872bcd/Recommender%20Extension%20source/src/com/rapidminer/data/BinaryCosine.java) computes common positive interactions divided by the square root of the two users' interaction counts. It does not use rating magnitudes.
-- [`CorrelationMatrix.java`](https://github.com/matmih/Recommender-extension/blob/3d89c7dbe247ca2db4c4d49cf6189d4467872bcd/Recommender%20Extension%20source/src/com/rapidminer/data/CorrelationMatrix.java) sorts all other user indices by correlation and takes `k`; it has no positive-similarity or minimum-overlap filter. Equal comparisons return zero, leaving tie order dependent on input ordering/stable sorting.
-- [`ApplyModel.java`](https://github.com/matmih/Recommender-extension/blob/3d89c7dbe247ca2db4c4d49cf6189d4467872bcd/Recommender%20Extension%20source/src/com/rapidminer/ItemRecommendation/ApplyModel.java) obtains the model's item set and passes target consumed items to ranking. [`PredictItemsFast.java`](https://github.com/matmih/Recommender-extension/blob/3d89c7dbe247ca2db4c4d49cf6189d4467872bcd/Recommender%20Extension%20source/src/com/rapidminer/eval/PredictItemsFast.java) selects the top `n`; equal scores can randomly replace a current candidate. Thus a single Top-1 export cannot establish a deterministic tie policy.
+- [`_userKnn.java`](https://github.com/matmih/Recommender-extension/blob/3d89c7dbe247ca2db4c4d49cf6189d4467872bcd/Recommender%20Extension%20source/src/com/rapidminer/ItemRecommendation/_userKnn.java) trains with `BinaryCosine`. For users `u,v`, source computes `|Iu ∩ Iv| / sqrt(|Iu| × |Iv|)`, where `Iu` is the set of positive interactions. `Predict(u,i)` is `count(selected neighbors that interacted with i) / k`. This is binary support, not an average of numeric ratings; unsupported items still score zero.
+- [`BinaryCosine.java`](https://github.com/matmih/Recommender-extension/blob/3d89c7dbe247ca2db4c4d49cf6189d4467872bcd/Recommender%20Extension%20source/src/com/rapidminer/data/BinaryCosine.java) computes that cosine over binary feedback. Rating magnitudes do not enter numerator or denominator.
+- [`CorrelationMatrix.java`](https://github.com/matmih/Recommender-extension/blob/3d89c7dbe247ca2db4c4d49cf6189d4467872bcd/Recommender%20Extension%20source/src/com/rapidminer/data/CorrelationMatrix.java) excludes self, sorts every other internal user index by similarity, and takes first `k`. It has no positive-similarity or minimum-overlap filter; zero-similarity users can fill remaining slots. Comparator returns `0` for equal similarities. [`EntityMapping.java`](https://github.com/matmih/Recommender-extension/blob/3d89c7dbe247ca2db4c4d49cf6189d4467872bcd/Recommender%20Extension%20source/src/com/rapidminer/data/EntityMapping.java) assigns internal IDs in first-seen order; stable Java object sorting therefore preserves that internal order for neighbor ties.
+- [`ApplyModel.java`](https://github.com/matmih/Recommender-extension/blob/3d89c7dbe247ca2db4c4d49cf6189d4467872bcd/Recommender%20Extension%20source/src/com/rapidminer/ItemRecommendation/ApplyModel.java) uses items observed in training, excluding items already consumed by each user. It asks for first `n`; zero-score candidates remain eligible. [`PredictItemsFast.java`](https://github.com/matmih/Recommender-extension/blob/3d89c7dbe247ca2db4c4d49cf6189d4467872bcd/Recommender%20Extension%20source/src/com/rapidminer/eval/PredictItemsFast.java) replaces a current candidate on equal score with probability 4/5 (`nextInt(5) <= 3`). [`WeightedItem.compareTo`](https://github.com/matmih/Recommender-extension/blob/3d89c7dbe247ca2db4c4d49cf6189d4467872bcd/Recommender%20Extension%20source/src/com/rapidminer/data/WeightedItem.java) returns `0` for equal scores; no food-ID tie-break exists. Candidate enumeration comes from [`CompactHashSet`](https://github.com/matmih/Recommender-extension/blob/3d89c7dbe247ca2db4c4d49cf6189d4467872bcd/Recommender%20Extension%20source/src/com/rapidminer/data/CompactHashSet.java), not an explicit item-ID sort. Exact tie results are therefore not reproducible from score values alone.
 - [`WeightedUserKnn.java`](https://github.com/matmih/Recommender-extension/blob/3d89c7dbe247ca2db4c4d49cf6189d4467872bcd/Recommender%20Extension%20source/src/com/rapidminer/ItemRecommendation/WeightedUserKnn.java)'s alternate weighted path sums similarities from binary-feedback neighbors who interacted with the item. This still is not rating-weighted prediction.
 
 **Interpretation:** if this public source corresponds to the installed extension, `Weighted Knn=false` means unweighted binary support, not unweighted arithmetic averaging of 1–5 ratings. Python's explicit-rating overlap cosine and weighted rating average are a different algorithm. This is a strong likely semantic explanation for the mismatch. Source/build linkage is missing; do not claim it as the proven cause of the native run yet.
 
 ### Source-semantics sensitivity probe
 
-An offline probe treated each positive rating as a binary interaction, computed binary cosine, chose global top-3 neighbors with user-ID-ascending ties, and checked whether each native item had maximum support among unrated candidates. **22/22** native items were within that model's maximum-support set; **21/22** users had multiple tied maximum-support candidates. This is compatibility evidence only: it did not run Altair, reproduce internal-ID ordering, or establish the installed binary's source revision/random choice.
+An offline probe treated each positive rating as a binary interaction, computed binary cosine, chose global top-3 neighbors in first-seen user order for similarity ties, and checked native-item support. All **22/22** native items have maximum score. Only **5/22** are unique maxima; remaining **17/22** users have a tied maximum. This is score compatibility, not exact parity: the installed build is unknown and the extension randomizes some equal-score selections.
+
+## Executable binary diagnostic
+
+Added separate script [`services/recommender/scripts/diagnose_altair_binary.py`](../services/recommender/scripts/diagnose_altair_binary.py). It does not import or modify the production engine. It ignores `rating`, constructs positive interaction sets, uses all-other-user neighbor selection (including zero similarities), computes `count/k`, excludes consumed items, and reports tie-compatible reference rankings. Its food-ID-ascending ranking is explicitly a deterministic comparison proxy, **not** the extension tie rule.
+
+Run from repository root:
+
+```powershell
+python services/recommender/scripts/diagnose_altair_binary.py `
+  --dataset services/recommender/tests/fixtures/phase_b_altair/datasets/foodrec_offline_train_264.csv `
+  --reference services/recommender/tests/fixtures/phase_b_altair/references/altair_train264_top1.csv `
+  --k 3 --top-n 1 --output $env:TEMP\altair_binary_train264.csv
+
+python services/recommender/scripts/diagnose_altair_binary.py `
+  --dataset services/recommender/tests/fixtures/phase_b_altair/datasets/ratings_uji_collaborative_filtering_43.csv `
+  --reference services/recommender/tests/fixtures/phase_b_altair/references/altair_reference_top2_43_SCREENSHOT_TRANSCRIPTION.csv `
+  --k 3 --top-n 2 --output $env:TEMP\altair_binary_toy43.csv
+```
+
+The checked-in per-user reports are [`altair_binary_train264_diagnostics.csv`](../services/recommender/tests/fixtures/phase_b_altair/reports/altair_binary_train264_diagnostics.csv) and [`altair_binary_toy43_diagnostics.csv`](../services/recommender/tests/fixtures/phase_b_altair/reports/altair_binary_toy43_diagnostics.csv). Each records candidate IDs, all candidate scores, selected binary neighbors (`user_id:overlap:similarity`), reference item score, max-score item set, score compatibility, and deterministic ID-ascending comparison.
+
+| Dataset | Source-score compatible | Unique-score/forced result | ID-ascending proxy |
+| --- | ---: | ---: | ---: |
+| Train-264 native Top-1 | 22/22 Altair items are within max-score set | 5/22 native items are unique maxima; other 17 are tied | 10/22 exact Top-1 items |
+| Toy-43 screenshot Top-2 | All 5 rows / 4 users fit top-2 scores | Not applicable: top-2 ranking has equal-score ties | 3/4 exact user lists; 3/5 exact `(user,item,rank)` rows |
+
+The 264 deterministic ID tie count is not an Altair prediction count: source has no ID tie-break and may choose another equal-score item. For 43, output is screenshot transcription, not native Altair CSV. All five screenshot rows are score-compatible; that supports the binary-scoring hypothesis across a second dataset but does not validate runtime or prove mathematical parity.
+
+## Research implication and implementation recommendation
+
+In the inspected source, `rating` is not read by User k-NN. Every user-food row becomes the same positive event. Rating values 1–5 therefore do **not** affect similarity, neighbors, item score, or rank; changing a row's rating from 1 to 5 leaves output unchanged. This operator is positive-interaction recommendation, not explicit rating prediction. `Weighted Knn=true` still weights binary interactions by similarity; it does not make the numeric rating matter.
+
+Choose implementation from the thesis definition, not from which one copies the current Altair list:
+
+- If the thesis says rating values represent preference intensity and specifies explicit-rating UBCF, keep Python's explicit-rating model as the reference. Do not call this binary Altair operator equivalent. For a future approved comparison, use a rating-aware Altair method or independently coded workflow matching the thesis equation; preserve the existing manual workflow unchanged.
+- If the thesis defines any recorded rating as a positive interaction, the separate binary diagnostic is the closer model. Document that all 1–5 values collapse to one event. Production migration still needs explicit approval, separate rating-prediction evaluation, and validation; do not switch based on Top-1 matches.
+
+No production implementation change is recommended until the thesis equation and installed Altair build are confirmed.
 
 ## Native comparison and diagnostic experiments
 

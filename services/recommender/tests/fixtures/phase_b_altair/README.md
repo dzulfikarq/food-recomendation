@@ -9,6 +9,7 @@ This bundle packages earlier user-provided FoodRec CSV and XML, one user-provide
 - `datasets/foodrec_offline_train_264.csv` — offline-sampled training set, 12 ratings per 22 users. See sampling guide. The original ratings' real-vs-synthetic provenance is not verified.
 - `references/altair_train264_top1.csv` — original 22-row Top-1 CSV supplied by the user. SHA-256 is recorded in `manifest.json`; all rank=1. Its exact workflow and installed extension build are still unverified.
 - `reports/altair_train264_python_diagnostics.csv` — per-user Python baseline candidates, scores, neighbors, overlap counts, similarities, and native-item rank/score; derived from the train fixture and native CSV.
+- `reports/altair_binary_train264_diagnostics.csv` and `reports/altair_binary_toy43_diagnostics.csv` — results from the isolated source-semantics diagnostic; the toy reference is a screenshot transcription, not a native export. See `docs/ALTAIR_PYTHON_PARITY_INVESTIGATION.md` and `services/recommender/scripts/diagnose_altair_binary.py`.
 - `references/altair_reference_top1_train264_SCREENSHOT_TRANSCRIPTION.csv` — separate 22-row historical screenshot transcription. Do not use it as ground truth now that native export is available.
 - `datasets/foodrec_offline_test_66.csv` — held-out evaluation rows, disjoint from train; *not* a ready MAE/RMSE ground truth without a rating prediction workflow.
 - `datasets/foodrec_snapshot_879.csv` — source export used for offline split. **Do not load or overwrite existing application database with it**.

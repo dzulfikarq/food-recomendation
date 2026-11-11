@@ -72,9 +72,19 @@
       "sha256": "6e1a67e2d8f9af0071e83c8d592ebcfe505ca2e22edeac132ebbff6811e9690e",
       "origin": "Python baseline per-user diagnostics generated from native export and train fixture"
     },
+    "reports/altair_binary_train264_diagnostics.csv": {
+      "bytes": 11723,
+      "sha256": "c2253eaac5b2b7849268020c494ff656da8555b7f72cde5b8cd36c417409b580",
+      "origin": "separate binary-interaction source-semantics diagnostic"
+    },
+    "reports/altair_binary_toy43_diagnostics.csv": {
+      "bytes": 972,
+      "sha256": "48d546119c160c04cb6ce7f89b4edf6e8bdb3cbc4a406d883f8130584b406332",
+      "origin": "separate binary-interaction diagnostic against screenshot transcription"
+    },
     "README.md": {
-      "bytes": 7315,
-      "sha256": "30b9d7c52a5df6cf1a1bdf1040a86eeb2037b9615cc128ac31a17f39a4a3cfa2",
+      "bytes": 7656,
+      "sha256": "8d047a4722f6b26d5110dc5dec0ae1537c3468a41759cdf6ddc6f7193cef1b9d",
       "origin": "current assistant notes"
     }
   }

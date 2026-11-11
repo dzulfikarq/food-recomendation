@@ -6,7 +6,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from worker import WorkerError, _run_in_child, compute_result, parse_snapshot, validate_parameters
+from worker import WorkerError, _run_in_child, compute_result, parse_snapshot, process_job, validate_parameters
 
 
 class WorkerSnapshotTests(unittest.TestCase):
@@ -66,6 +66,47 @@ class WorkerEngineTests(unittest.TestCase):
         job = {"id": "test-job", "attemptCount": 1, "leaseDurationSeconds": 60}
         result = _run_in_child(ratings, parameters, 10, api, job, {"workerId": "test-worker", "leaseToken": "test-token"}, threading.Event())
         self.assertEqual(result["recommendations"], [{"userId": 1, "foodId": 102, "rank": 1, "predictedRating": 4.0}])
+
+    def test_explicitly_claimed_manual_job_runs_and_submits_unverified_candidate_rows(self):
+        snapshot = b"user_id,food_id,rating\r\n1,101,5\r\n2,101,5\r\n2,102,4\r\n"
+        parameters = {
+            "kNeighbors": 2,
+            "topN": 1,
+            "minCommonRatings": 1,
+            "similarityStrategy": "overlap",
+            "activeFoodIds": [101, 102],
+        }
+
+        class Api:
+            submitted = None
+
+            def snapshot(self, _job, _identity):
+                return snapshot
+
+            def heartbeat(self, _job_id, _identity):
+                return None
+
+            def submit_result(self, _job_id, _identity, payload):
+                self.submitted = payload
+                return 201, {}, b"{}"
+
+            def report_failure(self, *_args):
+                raise AssertionError("Unexpected worker failure")
+
+        api = Api()
+        worker_id = "manual-worker"
+        job = {
+            "id": "manual-test-job",
+            "leaseToken": "test-token",
+            "datasetChecksum": hashlib.sha256(snapshot).hexdigest(),
+            "datasetRowCount": 3,
+            "parameters": parameters,
+            "timeoutSeconds": 10,
+            "attemptCount": 1,
+            "leaseDurationSeconds": 60,
+        }
+        process_job(api, job, worker_id, threading.Event())
+        self.assertEqual(api.submitted, {"recommendations": [{"userId": 1, "foodId": 102, "rank": 1, "predictedRating": 4.0}]})
 
 
 if __name__ == "__main__":

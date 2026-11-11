@@ -49,7 +49,7 @@ const commands = [
   [process.execPath, [prismaCli, "migrate", "deploy"]],
   [process.execPath, ["--import", "tsx", "prisma/seed.ts"]],
   [process.execPath, ["--import", "tsx", "prisma/seed-foods.ts"]],
-  [process.execPath, ["--import", "tsx", "--test", "--test-concurrency=1", "tests/auth.integration.test.ts", "tests/foods.integration.test.ts", "tests/ratings.integration.test.ts", "tests/recommendations.integration.test.ts", "tests/recommendation-jobs.integration.test.ts"]]
+  [process.execPath, ["--import", "tsx", "--test", "--test-concurrency=1", "tests/auth.integration.test.ts", "tests/foods.integration.test.ts", "tests/ratings.integration.test.ts", "tests/recommendation-jobs.integration.test.ts", "tests/recommendation-automation.integration.test.ts", "tests/recommendations.integration.test.ts"]]
 ];
 
 console.info(`Using isolated FoodRec integration database: ${databaseName}`);

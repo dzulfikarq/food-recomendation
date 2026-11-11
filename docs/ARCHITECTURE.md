@@ -20,9 +20,10 @@ app/
   api/auth/[...all]/     Better Auth handler
   api/admin/foods/       role-guarded Food CRUD/status/image/CSV routes
   api/admin/rating-datasets/ rating snapshot/create/download
+  api/admin/recommendation-engine/ locked engine config and monitoring
   api/admin/recommendation-batches/ import, validate, list/detail and atomic publish
   api/admin/recommendation-jobs/ explicit ADMIN-only staging enqueue
-  api/internal/recommendation-jobs/ secret-authenticated worker claim/snapshot/heartbeat/result/failure/status
+  api/internal/recommendation-jobs/ secret-authenticated worker schedule/claim/snapshot/heartbeat/result/failure/status
   api/me/recommendations/ owner-only published results
   api/foods/             public catalog + USER rating API
   api/my-ratings/        owner-only rating history API
@@ -42,11 +43,12 @@ lib/
   auth-client.ts         Better Auth React client
   authz.ts               server-side session/role checks
   env.ts                 Zod environment schemas
-  food/                  Food schemas, CSV parser, storage, query/API helpers
+  food/                  Food schemas, CSV parser, storage, revision-locked rating snapshots
+  recommendations/       PostgreSQL job lifecycle, scheduler, worker API helpers
   prisma.ts              singleton Prisma Client
   validation/auth.ts     request schemas
 prisma/
-  schema.prisma          domain/auth models + recommendation jobs/artifacts
+  schema.prisma          domain/auth models + rating revisions, locked engine config, worker/job/artifact state
   migrations/            additive PostgreSQL migrations
   food-catalog.ts        40 Food seed records
 scripts/
@@ -85,7 +87,8 @@ Better Auth menyimpan credential hash di `Account.password`. Ini mengikuti skema
 - `/foods` hanya menampilkan `isActive=true`; USER memberi/memperbarui satu rating 1–5 per Food lewat `PUT /api/foods/:id/rating`. Guest/admin tidak dapat menulis rating.
 - Rating write memakai row lock pada Food dan transaction untuk upsert Rating + mengisi `firstUsedAt` hanya sekali. Existing `@@unique([userId, foodId])` dan SQL CHECK tetap menjadi guard DB.
 - `/my-ratings` dan `/api/my-ratings` hanya mengembalikan rating milik USER aktif.
-- ADMIN snapshot memakai satu query terurut, membuat CSV `user_id,food_id,rating`, hash SHA-256 dan private file key. `DatasetExport` metadata immutable; download mengecek checksum dan hanya ADMIN. Snapshot saat ini dibuffer di memory; gunakan cursor streaming bila ukuran dataset tumbuh material.
+- ADMIN snapshot memakai revision lock PostgreSQL dan satu query terurut, membuat CSV `user_id,food_id,rating`, hash SHA-256 dan private file key. `DatasetExport` menyimpan revision dan metadata immutable; download mengecek checksum dan hanya ADMIN. Snapshot saat ini dibuffer di memory; gunakan cursor streaming bila ukuran dataset tumbuh material.
+- Trigger PostgreSQL menaikkan `RatingDatasetState.currentRevision` hanya pada insert/delete atau perubahan nilai rating sebenarnya; update nilai sama tidak membuat dirty revision. Snapshot mengunci state row saat membaca revision dan rating rows, sehingga concurrent write masuk ke revision setelah snapshot atau seluruhnya tercakup.
 - Ekspor tidak memasukkan nama, email, password, atau data personal. UBCF/Cosine stays in `services/recommender`; Next.js owns job DB and exposes only numeric snapshot data to the worker.
 
 ## Recommendation import and publication Fase 6–7
@@ -94,7 +97,7 @@ Better Auth menyimpan credential hash di `Account.password`. Ini mengikuti skema
 - Validasi memeriksa header/UTF-8/ukuran, ID integer, referensi User/Food, user dalam snapshot, pasangan duplikat, sequence rank, Top-N, kandidat yang telah dinilai pada snapshot, dan Food aktif. Error struktural/referensial all-or-nothing; batch invalid tersimpan sebagai DRAFT tanpa Recommendation rows.
 - Perubahan rating setelah snapshot menjadi warning stale, bukan bukti proses Altair. Kandidat yang baru dinilai setelah export juga diberi warning dan disembunyikan dari hasil user.
 - Publish memuat ulang file dan dataset, memvalidasi ulang referensi/rank/Food, lalu mengganti status dalam satu PostgreSQL transaction. Advisory transaction lock menserialisasi publisher dan partial unique index menjaga maksimal satu batch PUBLISHED. Batch lama menjadi SUPERSEDED, riwayat tidak dihapus.
-- `/api/me/recommendations` mengambil user dari session, tidak menerima userId frontend, memakai batch PUBLISHED, serta menyaring Food nonaktif dan rating milik user saat ini. Tidak ada perhitungan CF, skor similarity, scheduler, atau refresh otomatis.
+- `/api/me/recommendations` mengambil user dari session, tidak menerima userId frontend, memakai batch PUBLISHED, serta menyaring Food nonaktif dan rating milik user saat ini. Request rating/rekomendasi tidak menghitung CF atau similarity; scheduler terpisah hanya dipoll worker existing.
 - Endpoint admin: `GET /api/admin/recommendation-batches`, `POST /api/admin/recommendation-batches/import`, `GET /api/admin/recommendation-batches/:id`, `POST /api/admin/recommendation-batches/:id/publish`. Endpoint USER: `GET /api/me/recommendations`.
 - UBCF, Cosine Similarity, dan user k-NN dijalankan manual oleh ADMIN di Altair AI Studio Educational 2026.1.1. Nilai k dan Top-N disimpan per batch, tidak menjadi default algoritme permanen.
 
@@ -104,17 +107,22 @@ Better Auth menyimpan credential hash di `Account.password`. Ini mengikuti skema
 
 Initial migration memiliki FK restrictive untuk histori penelitian, check constraints skor/rank/count, trigger immutable `Food.foodCode`/`DatasetExport`, serta trigger perlindungan histori. Hanya record teknis Account/Session cascade ke User. Local Docker Compose memakai named volume `foodrec-postgres` dan tidak menghapus volume saat stop.
 
-## Recommendation boundary — V2 Phase C implemented; validation gate closed
+## Recommendation boundary — V2 Phase C/D implemented; validation gate closed
 
-Existing web path tetap memakai Altair CSV import, validation, and atomic publication. PostgreSQL `RecommendationJob` rows reference immutable `DatasetExport` snapshots; atomic claims use `FOR UPDATE SKIP LOCKED`, 60-second leases, heartbeat, 15-minute attempt timeout, three bounded attempts, and stale-lease recovery during subsequent claims. Retry failures back off 5/10 seconds. Job creation is explicit ADMIN-only and idempotent; no scheduler, rating trigger, or automatic enqueue exists.
+Existing web path tetap memakai Altair CSV import, validation, and atomic publication. PostgreSQL `RecommendationJob` rows reference immutable `DatasetExport` snapshots; atomic claims use `FOR UPDATE SKIP LOCKED`, 60-second leases, heartbeat, 15-minute attempt timeout, three bounded attempts, and stale-lease recovery during subsequent claims. Retry failures back off 5/10 seconds. Manual job creation stays explicit ADMIN-only and idempotent.
 
 Next.js owns PostgreSQL/Prisma, snapshot reads/checksum verification, lease enforcement, result validation, and artifact storage. Internal worker routes use `FOODREC_WORKER_SECRET` Bearer auth plus worker ID/lease token; snapshot and result bodies are bounded. Python uses stdlib HTTP, downloads only numeric user/food/rating CSV, verifies SHA-256, and calls existing engine. Worker never connects to PostgreSQL.
+
+Phase D adds a durable rating revision trigger, `RecommendationEngineConfig`, worker heartbeats, `lib/recommendations/scheduler.ts`, and a scheduler endpoint polled by the existing Python worker. PostgreSQL row locks serialize due checks across workers and restarts. The configurable interval defaults to 30 minutes; dirty means `currentRevision > processedRevision`. Dedupe key hashes rating revision, engine version, and frozen job parameters. Scheduler state/outcome and admin monitoring API survive process restarts.
+
+The automatic path is deliberately unreachable: DB checks force `autoProcessingEnabled=false`, `automaticPublicationEnabled=false`, and `validationStatus=PENDING_VALIDATION`; another DB trigger rejects every `AUTO_RATING_CHANGE` job. Admin PATCH accepts only `kNeighbors`, `topN`, and interval (defaults 3/5/30; not research-optimized). No API or Admin action can open parity gate. A separate validation-approved migration is required to change these locks.
 
 | Endpoint | Purpose |
 | --- | --- |
 | `POST /api/admin/recommendation-jobs` | Explicit ADMIN enqueue from `datasetExportId`, `kNeighbors`, `topN`, and UUID `idempotencyKey`; active Food IDs are frozen into job parameters. Same key/same request returns existing job; different request returns 409. |
 | `POST /api/admin/recommendation-jobs/:id/cancel` | ADMIN can cancel pending/running jobs; terminal jobs cannot be changed. |
 | `POST /api/internal/recommendation-jobs/claim` | Secret-authenticated atomic claim; body contains worker ID and engine version, so incompatible workers do not lease jobs. Returns one lease or 204. |
+| `POST /api/internal/recommendation-jobs/schedule` | Existing worker checks durable dirty state and due interval; auto enqueue remains blocked by DB validation gate. |
 | `GET /api/internal/recommendation-jobs/:id/snapshot` | Lease owner downloads checksum-verified, bounded CSV snapshot. |
 | `POST /api/internal/recommendation-jobs/:id/heartbeat` | Lease owner extends 60-second lease, never beyond attempt timeout. |
 | `POST /api/internal/recommendation-jobs/:id/result` | Lease owner submits bounded ranked scores; server validates users, active/unrated candidates, rank sequence, score range, and snapshot checksum. |
@@ -123,8 +131,10 @@ Next.js owns PostgreSQL/Prisma, snapshot reads/checksum verification, lease enfo
 
 Every internal call uses `Authorization: Bearer ...`; all per-job calls also send `X-FoodRec-Worker-Id` and `X-FoodRec-Lease-Token`. Secret is never returned to browser or logs. Network clients must use HTTPS except loopback. Request/result limits protect API memory; worker limits snapshot 20 MiB, result 2 MiB/10,000 rows.
 
-Each attempt has 15-minute timeout, 60-second renewable lease, and heartbeat. Failure retries max 3 attempts with 5-second then 10-second delay; third failure is terminal `FAILED`. Expired leases/timeouts are recovered atomically when next worker claims; no scheduler is required. Worker uses a separate spawned Python process per computation so timeout/lease loss can terminate CPU work. SIGINT/SIGTERM stops new claims and lets active work finish when possible.
+Each attempt has 15-minute timeout, 60-second renewable lease, and heartbeat. Failure retries max 3 attempts with 5-second then 10-second delay; third failure is terminal `FAILED`. Expired leases/timeouts are recovered atomically when next worker claims. Worker uses a separate spawned Python process per computation so timeout/lease loss can terminate CPU work. SIGINT/SIGTERM stops new claims and lets active work finish when possible.
 
-Results persist as JSONB `RecommendationJobArtifact` with DB-enforced `verificationStatus=UNVERIFIED`. `SUCCEEDED` means computation completed only. Artifacts have no relation to `RecommendationBatch`; they cannot enter manual publication path, replace active batch, or be published automatically. Existing manual Altair import/publish behavior remains unchanged. Auto-processing remains **OFF**.
+Results persist as JSONB `RecommendationJobArtifact` with DB-enforced `verificationStatus=UNVERIFIED`, source/current rating revisions, and stale flag. `SUCCEEDED` means computation completed only. Artifacts have no relation to `RecommendationBatch`; they cannot enter manual publication path, replace active batch, or be published automatically. Existing manual Altair import/publish behavior remains unchanged. Auto-processing and publication remain **OFF**.
+
+`GET/PATCH /api/admin/recommendation-engine` exposes safe config and read-only monitoring: gate reasons, dirty revision state, scheduler times/outcome, pending/running/failed counts, last successful execution, and worker heartbeat online status. No dashboard redesign is included in Phase D.
 
 Phase B remains **Pending Validation** mathematically: 43-rating screenshot transcription matches 5/5 rows; train-264 Top-1 item IDs match 0/22. Original exports, full 264 workflow settings, and intermediate score/neighbor evidence remain unavailable.

@@ -5,11 +5,11 @@ FoodRec membantu pengguna menjelajahi makanan, menyimpan rating, dan melihat rek
 ## Status
 
 - **Implemented:** user journey personal, katalog/rating, halaman rekomendasi, dashboard admin operasional, dan workflow CSV terpandu sampai publikasi.
-- **FoodRec V2 Phase C:** additive PostgreSQL job queue, authenticated internal API, and stdlib Python worker. Jobs require explicit admin enqueue; no rating-trigger or schedule.
-- **Validation gate:** worker artifacts always `UNVERIFIED`; `SUCCEEDED` means compute finished only. No automatic batch creation/publication or active-batch replacement.
+- **FoodRec V2 Phase D:** durable PostgreSQL rating revisions, revision-consistent snapshots, worker-polled scheduler, locked engine config, dedupe, stale-result metadata, and admin monitoring API. Reuses Phase C queue/worker.
+- **Validation gate:** DB constraints force auto-processing/publication OFF and `PENDING_VALIDATION`; DB trigger rejects automatic jobs. Worker artifacts stay `UNVERIFIED`; `SUCCEEDED` means compute finished only. No automatic batch creation/publication or active-batch replacement.
 - **Automatic processing:** OFF. Mathematical parity **Pending Validation**; 43-rating output **MATCHED OUTPUT**, train-264 Top-1 **MISMATCH**. Screenshot transcription is not original Altair export.
 - **Admin workflow:** statistik dari database, empat tahap Dataset → Altair manual → Import/Validasi → Publish, snapshot pilihan, filter/pencarian riwayat, detail checksum dan metadata.
-- **Automated checks:** Python suite (23 tests), `npm test` (14 tests), lint, typecheck, build, and PostgreSQL integration suite (5 tests) run on isolated `foodrec_test`.
+- **Automated checks:** Python suite (24 tests), `npm test` (14 tests), lint, typecheck, build, and PostgreSQL integration suite (6 tests) run on isolated `foodrec_test`.
 - **Pending Validation:** round-trip dengan file hasil Altair penelitian sesungguhnya, production database/storage, security/performance production, serta review visual, keyboard, dan screen reader lintas perangkat.
 - **Manual research workflow:** UBCF, Cosine Similarity, dan user k-NN tetap dapat dijalankan di Altair AI Studio Educational 2026.1.1; existing CSV validation/publication tetap berlaku.
 
@@ -57,9 +57,9 @@ Buka `http://localhost:3000`. `db:seed` membuat ADMIN hanya bila email belum ada
 3. Di `/admin/recommendations`, pilih DatasetExport sumber, isi k/Top-N yang benar-benar dipakai, pilih CSV, tinjau nama/ukuran file, error/warning/preview, lalu konfirmasi **Terbitkan Rekomendasi**. Upload tidak otomatis aktif; batch kosong/invalid tidak dapat diterbitkan.
 4. USER melihat hasil batch PUBLISHED miliknya di `/recommendations`. Food nonaktif dan rekomendasi yang sudah dinilai disembunyikan. Perubahan rating tidak menghitung ulang algoritme dan tidak menjamin rekomendasi baru.
 
-### Phase C worker (staging only)
+### Phase C/D worker (staging only; automation locked)
 
-Phase C exposes `POST /api/admin/recommendation-jobs` for explicit ADMIN enqueue, and authenticated internal routes for claim, snapshot, heartbeat, result, failure, and status. No UI, rating trigger, scheduler, or auto-processing is enabled. Internal routes require `Authorization: Bearer <FOODREC_WORKER_SECRET>`; job operations also require worker ID and lease token. Use HTTPS except loopback development.
+Worker exposes `POST /api/admin/recommendation-jobs` for explicit ADMIN enqueue, and authenticated internal routes for schedule check, claim, snapshot, heartbeat, result, failure, and status. Scheduler runs through existing Python worker polling; PostgreSQL stores dirty revisions, config, interval, and heartbeat. Internal routes require `Authorization: Bearer <FOODREC_WORKER_SECRET>`; job operations also require worker ID and lease token. Use HTTPS except loopback development.
 
 Apply additive migrations with `npm run db:migrate:deploy`, start Next.js (`npm run dev`), then open another PowerShell terminal:
 
@@ -70,7 +70,7 @@ $env:FOODREC_WORKER_ID = "local-worker-1" # optional
 .\scripts\run-recommender-worker.ps1
 ```
 
-Worker polls every 2 seconds by default, logs job IDs/attempts without ratings or credentials, and finishes in-flight work after Ctrl+C before stopping claims. Configure `FOODREC_WORKER_POLL_SECONDS` (0.5–60) or `FOODREC_WORKER_LOG_LEVEL` if needed. Jobs retry at most 3 attempts; expired leases/timeouts recover on a later claim. Result artifacts stay `UNVERIFIED`, and Phase B mathematical parity remains **Pending Validation**. See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) and [`docs/RECOMMENDATION_ENGINE_VALIDATION.md`](docs/RECOMMENDATION_ENGINE_VALIDATION.md).
+Worker claims jobs every 2 seconds by default and checks scheduler due state at most once per minute; configured scheduler interval defaults to 30 minutes. It logs job IDs/attempts without ratings or credentials and finishes in-flight work after Ctrl+C before stopping claims. Configure `FOODREC_WORKER_POLL_SECONDS` (0.5–60) or `FOODREC_WORKER_LOG_LEVEL` if needed. Jobs retry at most 3 attempts; expired leases/timeouts recover on a later claim. Admin monitoring: `GET/PATCH /api/admin/recommendation-engine`; PATCH can change only `kNeighbors`, `topN`, and `scheduleIntervalMinutes`. DB locks auto-processing/publication and parity status until a separate validation-approved migration; no API/Admin override. Result artifacts stay `UNVERIFIED`; Phase B mathematical parity remains **Pending Validation**. See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) and [`docs/RECOMMENDATION_ENGINE_VALIDATION.md`](docs/RECOMMENDATION_ENGINE_VALIDATION.md).
 
 CSV hasil maksimal 2 MB/10.000 baris, UTF-8, header wajib persis `user_id,item_id,rank`; ID dan rank integer positif, rank per user berurutan mulai 1 dan tidak melebihi Top-N. Integrasi file Altair penelitian sesungguhnya masih **Pending Validation**.
 
@@ -101,7 +101,7 @@ python -m unittest discover -s tests -v
 | `npm run lint` | ESLint |
 | `npm run typecheck` | TypeScript check |
 | `npm test` | Unit test validasi autentikasi |
-| `npm run test:integration` | PostgreSQL/Auth/Food/Rating/Recommendation integration; perlu DB `_test` dan port `3101`–`3104` kosong |
+| `npm run test:integration` | PostgreSQL/Auth/Food/Rating/Recommendation/automation integration; perlu DB `_test` dan port `3101`–`3106` kosong |
 | `npm run db:generate` | Generate Prisma Client |
 | `npm run db:migrate` | Terapkan/dev migration PostgreSQL |
 | `npm run db:migrate:deploy` | Terapkan migration pada deployment |

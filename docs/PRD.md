@@ -4,7 +4,7 @@ Status fitur menggunakan **Implemented** (kode tersedia), **Tested** (automated/
 
 ## 1. Product Overview
 
-FoodRec adalah aplikasi web untuk menjelajahi makanan, menyimpan preferensi pengguna, dan menyajikan rekomendasi yang telah diterbitkan. Website menyimpan akun, katalog, rating, snapshot, batch, riwayat audit, antrean recommendation job durable, dan artifact staging yang belum terverifikasi. User-Based Collaborative Filtering dengan Cosine Similarity tetap diproses manual oleh administrator di **Altair AI Studio Educational 2026.1.1**; Phase C menambahkan job Python eksplisit untuk staging tanpa mengubah publikasi CSV manual.
+FoodRec adalah aplikasi web untuk menjelajahi makanan, menyimpan preferensi pengguna, dan menyajikan rekomendasi yang telah diterbitkan. Website menyimpan akun, katalog, rating, snapshot, batch, riwayat audit, antrean recommendation job durable, dan artifact staging yang belum terverifikasi. Altair manual tetap menjadi jalur riset/publikasi; Python worker dapat menjalankan job manual terpilih ke staging. Phase D menambahkan durable rating-change detection, scheduler polling melalui worker existing, config, dan monitoring API—otomatisasi tetap DB-locked sampai mathematical parity tervalidasi.
 
 Implementasi mencakup foundation, autentikasi, Food Management, rating, snapshot CSV, validasi hasil Altair, manajemen batch, publikasi, dan halaman rekomendasi USER. Pemrosesan Altair tetap manual; kesesuaian dengan file penelitian asli dan review visual lintas perangkat masih perlu divalidasi.
 
@@ -14,7 +14,7 @@ Implementasi mencakup foundation, autentikasi, Food Management, rating, snapshot
 
 ## FoodRec V2 status
 
-Phase C menambahkan antrean PostgreSQL, internal API dengan autentikasi service, dan worker Python. Job hanya dibuat eksplisit oleh ADMIN; hasil worker tetap artifact `UNVERIFIED` dan tidak membuat atau menerbitkan batch. Tidak ada pemrosesan otomatis dari rating atau scheduler. Phase B: transkripsi screenshot 43 rating **MATCHED OUTPUT**; Top-1 train-264 **MISMATCH**. Paritas matematis tetap **Pending Validation** karena file referensi bukan export asli dan konfigurasi/score workflow 264 belum tersedia. Pemrosesan otomatis tetap **OFF**. Lihat [`RECOMMENDATION_ENGINE_VALIDATION.md`](RECOMMENDATION_ENGINE_VALIDATION.md).
+Phase C menyediakan antrean PostgreSQL, internal API terautentikasi, dan Python worker. Phase D mencatat revision rating durable, snapshot konsisten, scheduler worker dengan interval default 30 menit, dedupe key, heartbeat dan admin monitoring API. DB checks/trigger memaksa auto-processing/publication OFF, `PENDING_VALIDATION`, dan menolak automatic jobs. Job manual tetap bisa dijalankan; hasil `UNVERIFIED`, `SUCCEEDED` hanya berarti perhitungan selesai, tanpa batch/publication. Phase B: screenshot 43 rating **MATCHED OUTPUT**; Top-1 train-264 **MISMATCH**. Paritas tetap **Pending Validation**. Lihat [`RECOMMENDATION_ENGINE_VALIDATION.md`](RECOMMENDATION_ENGINE_VALIDATION.md).
 
 ## 2. Problem Statement
 
@@ -73,6 +73,7 @@ Pengguna membutuhkan cara menemukan makanan sesuai preferensi, sementara pola ra
 | AD-06 | ADMIN mengimpor hasil CSV dengan dataset sumber dan k/Top-N; validasi all-or-nothing, preview, error row, stale warnings, checksum, dan report. | Implemented; parser/API integration Tested |
 | AD-07 | Publish batch tervalidasi secara atomic; batch lama SUPERSEDED, publisher dan waktu tersimpan, history dapat ditinjau. | Implemented; PostgreSQL concurrent publication Tested |
 | AD-08 | Workflow empat tahap menampilkan status berbasis bukti database; dataset dapat dipilih/diunduh, proses Altair dijelaskan manual, CSV tervalidasi, batch kosong/invalid tidak dapat diterbitkan, dan riwayat dapat dicari/filter tanpa mengubah audit. | Implemented; parser/API/atomic publication integration Tested; file penelitian dan visual/a11y review Pending Validation |
+| AD-09 | Admin membaca config/gate, dirty revision, waktu dan hasil scheduler, job counts, last successful processing, serta worker heartbeat melalui API; hanya parameter/interval aman dapat diubah. | Phase D implemented; PostgreSQL integration Tested; UI monitoring Phase E |
 
 ## 6. User Flows
 
@@ -115,8 +116,9 @@ Alur berikut **Implemented**:
 
 - Metode penelitian: **User-Based Collaborative Filtering (UBCF)**.
 - Similarity: **Cosine Similarity**, `sim(u,v) = (r_u · r_v) / (||r_u|| × ||r_v||)`, dihitung pada item yang sama-sama dinilai sesuai workflow final.
-- Mesin utama: **Altair AI Studio Educational 2026.1.1**, proses manual administrator.
-- Website menyimpan rating, snapshot export, parameter, result CSV checksum, validation report, Recommendation rows, status publish, dan riwayat. Website **tidak** menjalankan algoritma.
+- Jalur riset/publikasi utama: **Altair AI Studio Educational 2026.1.1**, proses manual administrator. Python engine juga dapat dijalankan oleh worker existing untuk job manual terkontrol, tetapi hasil staging tidak tervalidasi.
+- Website menyimpan rating revisions, snapshots, parameters, Altair result CSV checksum, validation report, Recommendation rows, publication history, job leases, and `UNVERIFIED` artifacts. Tidak ada rekomendasi dihitung di rating request.
+- Config defaults `autoProcessingEnabled=false`, `kNeighbors=3`, `topN=5`, interval 30 menit, engine `python-ubcf-v1`, validation `PENDING_VALIDATION`; nilai parameter bukan hasil optimasi penelitian. Database constraints mencegah Admin/API mengubah validation gate atau mengaktifkan processing/publication.
 - Minimum overlap, centering/normalisasi rating, rumus prediksi, tie-break, cold-start, `kNeighbors`, `topN`, score scale dan evaluasi **Pending Validation**.
 
 ## 9. CSV Integration
@@ -137,13 +139,17 @@ Food CSV template/preview/atomic import dan rating CSV snapshot/checksum/downloa
 | --- | --- | --- | --- |
 | User | Identitas/auth/role; integer auto-increment. | Email unique; role USER/ADMIN; nama, email, timestamps. Credential hash disimpan pada `Account.password` sesuai Better Auth. | Implemented |
 | Food | Katalog penelitian. | Integer ID, unique immutable foodCode, metadata yang diminta, isActive, firstUsedAt. | Implemented; CRUD admin tersedia |
-| Rating | Preferensi explicit USER. | FK User/Food, unique user-food, CHECK integer 1–5, index kedua FK. `firstUsedAt` diisi atomik saat rating pertama. | Implemented; API/UI/history tersedia |
+| Rating | Preferensi explicit USER. | FK User/Food, unique user-food, CHECK integer 1–5, index kedua FK. `firstUsedAt` diisi atomik saat rating pertama; durable revision only changes on insert/delete/real value change. | Implemented; API/UI/history tersedia |
+| RatingDatasetState | Revision durable dataset dan progress processing. | Singleton row; trigger hanya menambah current revision untuk insert/delete/perubahan nilai rating; processed revision stays ≤ current. | Phase D implemented; PostgreSQL integration Tested |
 | FoodImport | Audit import katalog. | FK admin restrictive, checksum, row counts, VALIDATED/PROCESSING/COMPLETED/FAILED, private staging key. | Implemented; preview/atomic commit tersedia |
-| DatasetExport | Metadata snapshot CSV rating. | FK admin restrictive, count/checksum/private path, immutable trigger. | Implemented; ADMIN export/download tersedia |
+| DatasetExport | Metadata snapshot CSV rating. | FK admin restrictive, count/checksum/revision/private path, immutable trigger. | Implemented; ADMIN export/download tersedia |
 | RecommendationBatch | Result CSV, sumber snapshot, importer/publisher, parameter, status, validasi. | FK restrictive; metadata validasi JSON; check publisher/waktu saat publish; maksimal satu PUBLISHED melalui partial unique index + transaction lock. | Implemented; publication concurrency Tested |
+| RecommendationEngineConfig | Parameter server-side, worker schedule, processing/publication gate. | Singleton; CHECK locks auto flags false, validation PENDING, engine version fixed; bounds on parameters/interval. | Phase D implemented; API/DB gate Tested |
+| RecommendationWorker | Worker heartbeat/version for operations monitoring. | Worker ID primary key; timestamp index; stale heartbeats shown offline. | Phase D implemented; PostgreSQL integration Tested |
+| RecommendationJob / Artifact | Durable manual queue and staging output. | Unique idempotency/dedupe keys, leases/retries; DB trigger blocks automatic job; artifacts `UNVERIFIED`, source/current revision and stale flag. | Phase C/D implemented; PostgreSQL integration Tested |
 | Recommendation | Rank result per batch/user/food. | FK restrictive; unique batch-user-food dan batch-user-rank; rank positif; tanpa cascade. | Implemented; owner/filter Tested |
 
-Better Auth memerlukan tabel teknis Session, Account, Verification. Session/Account boleh cascade saat User dihapus; relasi penelitian memakai RESTRICT. Snapshot/history tidak boleh terhapus tanpa sengaja. FoodImport staging key menyimpan identifier file privat, bukan path absolut yang dikirim ke client. Fase 3 migration/constraints telah diuji pada PostgreSQL `_test`; deployment DB **Pending Validation**.
+Better Auth memerlukan tabel teknis Session, Account, Verification. Session/Account boleh cascade saat User dihapus; relasi penelitian memakai RESTRICT. Snapshot/history tidak boleh terhapus tanpa sengaja. FoodImport staging key menyimpan identifier file privat, bukan path absolut yang dikirim ke client. Fase 3 dan Phase D migrations/constraints telah diuji pada PostgreSQL `_test`; deployment DB **Pending Validation**.
 
 ## 11. UI/UX Requirements
 
@@ -176,6 +182,7 @@ Better Auth memerlukan tabel teknis Session, Account, Verification. Session/Acco
 7. Altair dikerjakan manual; hasil tidak tampil sebelum validasi/publikasi batch. **Implemented**; file Altair real **Pending Validation**.
 8. Import katalog insert-only; jika satu baris invalid, tidak ada record makanan yang disimpan. **Implemented; concurrent commit diuji**.
 9. Food Code immutable setelah insert. Makanan import dibuat ACTIVE dan tidak mengubah item existing. **Implemented**.
+10. Rating revision berubah hanya pada insert/delete/perubahan score; scheduler memakai durable dirty revision, tetapi automatic enqueue/processing/publication tidak dapat diaktifkan sebelum parity validation melalui migration terpisah. Worker artifacts tetap `UNVERIFIED` dan tidak mengganti batch aktif. **Phase D implemented and tested**.
 
 ## 14. Development Roadmap
 
@@ -188,6 +195,9 @@ Better Auth memerlukan tabel teknis Session, Account, Verification. Session/Acco
 | 5. Altair workflow | Manual UBCF/Cosine/user k-NN process; exchange rating/result CSV. | Workflow contract implemented; Altair real-file compatibility Pending Validation | F4 |
 | 6. Validation and audit | Result checks, import report, stale warnings, batch lifecycle/audit. | Implemented; parser/API/PostgreSQL integration Tested | F5 |
 | 7. Recommendation publication | Atomic publish, batch history, private user recommendation UI. | Implemented; concurrent PostgreSQL integration Tested | F6 |
+| V2 Phase D | Durable rating revisions, worker-polled PostgreSQL scheduler, locked config/gates, dedupe/stale metadata, monitoring API. | Implemented; PostgreSQL integration tested; automatic enqueue blocked by DB trigger and gate constraints. | V2 Phase C; parity validation remains pending |
+| V2 Phase E | Admin/user automation monitoring UX. | Planned; API contract available; do not add a gate override. | Phase D |
+| V2 Phase F | Full parity verification and gate review. | Planned; job success is not parity evidence. | Original Altair evidence + separate approval |
 | 8. Hardening/release | Security, accessibility, load, operations and deployment. | Planned | F1–F7 |
 
 ## 15. Acceptance Criteria
@@ -205,6 +215,7 @@ Better Auth memerlukan tabel teknis Session, Account, Verification. Session/Acco
 | CSV food import F3 | Strict parser, UTF-8/template/preview, duplicate checks, no partial commit, concurrent/idempotent commit, audit history. | PostgreSQL integration lulus |
 | Rating F4 | Guest tidak bisa menulis; USER create/update 1–5; unique user-food; inactive food ditolak; firstUsedAt ditandai; history privat tersedia. | PostgreSQL integration lulus |
 | Rating export F4 | Admin membuat snapshot stabil, CSV berisi ID/rating saja, checksum/file privat, akses download admin-only. | PostgreSQL integration lulus |
+| V2 Phase D | Rating revision durable, snapshot revision-consistent, scheduler/dedupe via worker existing, locked validation gate, stale artifact safety, admin monitoring API. | Build, lint, typecheck, unit, Python, dan 6 PostgreSQL integration tests lulus; gate remains closed |
 | F5 | Manual Altair result CSV contract and compatibility with actual research export. | Pending Validation |
 | F6–F7 | Validation, history, atomic publish, owner-only page/filter. | Implemented; automated/integration Tested; visual and real Altair dataset Pending Validation |
 | F8 | Production hardening, accessibility, performance and operations. | Planned |

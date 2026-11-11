@@ -6,12 +6,12 @@
 
 | Phase | Status | Notes |
 | --- | --- | --- |
-| A — Foundation and Python core | **Implemented; 23 unit tests pass; research fixture Pending Validation** | Pure functions, synthetic fixture, documented baseline. |
+| A — Foundation and Python core | **Implemented; 24 unit tests pass; research fixture Pending Validation** | Pure functions, synthetic fixture, documented baseline. |
 | B — Altair validation | **Output comparison complete; mathematical parity Pending Validation** | 43: MATCHED OUTPUT (5/5); train-264: MISMATCH (0/22 item IDs). Screenshot transcription and incomplete 264 workflow prevent parity claim. |
 | C — PostgreSQL jobs and authenticated worker API | **Implemented; PostgreSQL integration tested** | Additive migration, atomic leased queue, secret-authenticated routes, isolated Python worker, `UNVERIFIED` artifacts only. Explicit enqueue; no auto-processing/publication. |
-| D — Rating-triggered and scheduled processing | Planned; automatic processing OFF | Must wait for validation and integration gates. |
-| E — Admin/user automation UX | Planned | Existing manual CSV workflow remains unchanged. |
-| F — Full verification | Planned | No end-to-end worker verification yet. |
+| D — Durable rating revisions, scheduler, locked configuration, monitoring API | **Implemented; PostgreSQL integration tested; automatic processing/publication OFF** | Existing Python worker polls PostgreSQL-backed scheduler; dedupe/stale metadata present. DB constraints hold gate at `PENDING_VALIDATION`, and trigger rejects all automatic jobs. No second queue/worker/service. |
+| E — Admin/user automation UX | Planned | Admin monitoring API contract exists; UI can display status but must not expose validation/enable controls. Manual CSV workflow remains unchanged. |
+| F — Full parity verification | Planned; mathematical parity **Pending Validation** | Requires original Altair exports/settings and separate approval; job success is not parity evidence. |
 
 | Fase | Cakupan | Status | Dependensi |
 | --- | --- | --- | --- |
@@ -34,7 +34,7 @@
 - Riwayat tetap menjaga checksum, waktu, admin, parameter, preview, dan metadata penelitian. Batch kosong/invalid tidak diterbitkan; ambang peringatan cakupan hampir penuh 90% adalah heuristik sementara.
 - Lint, typecheck, build, unit tests, dan PostgreSQL integration tests UX V1 **lulus** setelah verifikasi. Review manual perangkat, keyboard, screen reader, dan dataset penelitian **Pending Validation**.
 
-## Acceptance checks Fase 1–4
+## Acceptance checks Fase 1–4 and V2 Phase D
 
 - [x] Public home, responsive public/auth/admin layouts.
 - [x] Register fields include name/email/password/confirmation; server validation; public role USER only.
@@ -53,5 +53,9 @@
 - [ ] Production object storage/persistent volume, DB operations, shared rate-limit storage, and production security/performance review.
 - [x] Dashboard Admin menggunakan statistik aktual; workflow empat tahap dan riwayat batch search/filter memakai query baca saja.
 - [x] Parser/import menolak hasil kosong; publish revalidasi server dan mempertahankan atomic publication.
+- [x] V2 Phase D: rating insert/delete/real value change increments durable PostgreSQL revision; unchanged value does not.
+- [x] V2 Phase D: snapshot locks/captures revision with rating rows; worker-driven scheduler checks dirty state and deduplicates revision/version/parameters under PostgreSQL locks.
+- [x] V2 Phase D: default config 3 neighbors, Top-5, 30-minute interval; processing/publication remain DB-locked OFF and `PENDING_VALIDATION`; automatic jobs rejected by DB trigger.
+- [x] V2 Phase D: admin monitoring API reports config/gate, dirty state, schedule, job counts, worker heartbeat and last successful processing; stale outputs remain `UNVERIFIED` and do not alter active batch.
 
-Altair tetap proses manual; validasi round-trip dengan file hasil penelitian sebenarnya masih diperlukan. Python core belum terintegrasi ke web/worker; automatic processing tetap OFF. Tidak ada rekomendasi dummy atau scheduler. Tidak ada database reset atau penghapusan snapshot/batch dalam UX V1.
+Altair tetap jalur riset/publikasi manual; round-trip file penelitian dan mathematical parity masih Pending Validation. Phase D scheduler telah tersambung ke Python worker existing, tetapi DB gate menolak automatic jobs dan publication. Worker manual tetap menghasilkan `UNVERIFIED`; tidak ada rekomendasi fallback/dummy atau perubahan batch aktif. Migration/test hanya memakai PostgreSQL `_test`; tidak ada reset database utama. Phase E belum dimulai.

@@ -1,6 +1,6 @@
 {
   "bundle": "FoodRec Phase B Altair output comparison",
-  "references_status": "manual screenshot transcriptions; not verified exported Altair CSV",
+  "references_status": "one user-provided native train-264 Altair CSV plus manual screenshot transcriptions; source workflow/build not independently verified",
   "files": {
     "datasets/ratings_uji_collaborative_filtering_43.csv": {
       "bytes": 367,
@@ -62,9 +62,19 @@
       "sha256": "5a6cc9b320e981b5f45b7f6cb47441f3cde32e19a93706073e1753a999c88271",
       "origin": "transcribed screenshot"
     },
+    "references/altair_train264_top1.csv": {
+      "bytes": 216,
+      "sha256": "988f96d195fb793b1553ab82d263c46ba7cee6f833525a575791ae024507c3e4",
+      "origin": "user-provided native Altair CSV export"
+    },
+    "reports/altair_train264_python_diagnostics.csv": {
+      "bytes": 9254,
+      "sha256": "6e1a67e2d8f9af0071e83c8d592ebcfe505ca2e22edeac132ebbff6811e9690e",
+      "origin": "Python baseline per-user diagnostics generated from native export and train fixture"
+    },
     "README.md": {
-      "bytes": 6766,
-      "sha256": "1a937b3b3daf3bb47b6ed25b33fe53246651b664783dd4938f13fb72749c5107",
+      "bytes": 7315,
+      "sha256": "30b9d7c52a5df6cf1a1bdf1040a86eeb2037b9615cc128ac31a17f39a4a3cfa2",
       "origin": "current assistant notes"
     }
   }

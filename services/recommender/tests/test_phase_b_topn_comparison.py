@@ -1,4 +1,5 @@
 import csv
+import hashlib
 import sys
 import unittest
 from pathlib import Path
@@ -96,6 +97,35 @@ class PhaseBTopNComparisonTests(unittest.TestCase):
             self.assertNotIn(food_id, ratings[user_id])
         for user_id, food_id, _ in reference:
             self.assertNotIn(food_id, ratings[user_id])
+
+    def test_native_train264_export_reproduces_zero_of_22_top1_matches(self):
+        dataset = FIXTURES / "datasets" / "foodrec_offline_train_264.csv"
+        native_path = FIXTURES / "references" / "altair_train264_top1.csv"
+        input_rows, ratings = read_ratings(dataset)
+        native = read_reference(native_path)
+        actual, _ = run_top_n(ratings, range(1, 41), top_n=1)
+
+        self.assertEqual(
+            hashlib.sha256(dataset.read_bytes()).hexdigest(),
+            "19e34a779d3637b12667f4a7c3f4f369c8c901c45513b25f2965811ffa6fa349",
+        )
+        self.assertEqual(
+            hashlib.sha256(native_path.read_bytes()).hexdigest(),
+            "988f96d195fb793b1553ab82d263c46ba7cee6f833525a575791ae024507c3e4",
+        )
+        self.assertEqual(len(input_rows), 264)
+        self.assertEqual(len(native), 22)
+        self.assertEqual([row[0] for row in actual], [row[0] for row in native])
+        self.assertEqual([row[2] for row in native], [1] * 22)
+        self.assertEqual(actual, PYTHON_TOP1_264)
+        item_matches = sum(
+            python[1] == altair[1] for python, altair in zip(actual, native)
+        )
+        self.assertEqual(item_matches, 0)
+        for user_id, food_id, _ in native:
+            self.assertIn(food_id, range(1, 41))
+            self.assertNotIn(food_id, ratings[user_id])
+            self.assertEqual(len(set(range(1, 41)) - set(ratings[user_id])), 28)
 
     def test_train264_reference_items_are_candidates_but_not_all_are_predictable(self):
         _, ratings = read_ratings(FIXTURES / "datasets" / "foodrec_offline_train_264.csv")

@@ -1,13 +1,15 @@
 # FoodRec — Phase B Altair comparison package
 
-This bundle packages earlier user-provided FoodRec CSV and XML, plus **manual transcriptions of user-provided screenshots** for comparison. It does **not** establish algorithm parity.
+This bundle packages earlier user-provided FoodRec CSV and XML, one user-provided native train-264 Altair export, plus **manual transcriptions of older screenshots**. It does **not** establish algorithm parity.
 
 ## Contents
 - `datasets/ratings_uji_collaborative_filtering_43.csv` — 43 rating toy/fixture input (8 users; 6 foods). **Not real research results**.
 - `workflows/FoodRec_Top2_Fixed.xml` — operator `User k-NN` with k=3, Weighted Knn=false, two Apply Model branches n=1/n=2. It retrieves `//Local Repository/data/ratings_uji_collaborative_filtering`. This is not a self-contained run: the repository entry must exist in Altair.
 - `references/altair_reference_top2_43_SCREENSHOT_TRANSCRIPTION.csv` — 5 rows copied from screenshot `screenshots/altair_43ratings_top2.png` (Oct 24). Transcription; no exported original CSV or similarity scores.
 - `datasets/foodrec_offline_train_264.csv` — offline-sampled training set, 12 ratings per 22 users. See sampling guide. The original ratings' real-vs-synthetic provenance is not verified.
-- `references/altair_reference_top1_train264_SCREENSHOT_TRANSCRIPTION.csv` — 22 rows manually transcribed from `screenshots/altair_train264_top1.png` (Oct 26). Assumed associated with training-264 run based on the screenshots shown together; original Altair exported output and full process settings **not** provided. All rank=1.
+- `references/altair_train264_top1.csv` — original 22-row Top-1 CSV supplied by the user. SHA-256 is recorded in `manifest.json`; all rank=1. Its exact workflow and installed extension build are still unverified.
+- `reports/altair_train264_python_diagnostics.csv` — per-user Python baseline candidates, scores, neighbors, overlap counts, similarities, and native-item rank/score; derived from the train fixture and native CSV.
+- `references/altair_reference_top1_train264_SCREENSHOT_TRANSCRIPTION.csv` — separate 22-row historical screenshot transcription. Do not use it as ground truth now that native export is available.
 - `datasets/foodrec_offline_test_66.csv` — held-out evaluation rows, disjoint from train; *not* a ready MAE/RMSE ground truth without a rating prediction workflow.
 - `datasets/foodrec_snapshot_879.csv` — source export used for offline split. **Do not load or overwrite existing application database with it**.
 - `workflows/test2_snapshot879.xml` and `workflows/FoodRec_879Rating_EmptyBranch_Fix.xml` — prior 879-snapshot workflows; latest XML is modified to bypass empty Top-2 branch but has not been validated here by running Altair.
@@ -18,7 +20,7 @@ Run offline only. Keep auto-processing and publication **OFF**; do not connect t
 
 1. Import `datasets/ratings_uji_collaborative_filtering_43.csv` into Altair Local Repository. Verify 43 rating rows, integer ID columns, and numeric `rating`; do not filter, normalize, or split. Open `workflows/FoodRec_Top2_Fixed.xml`; point Retrieve at that imported file. The XML records `rating` as label, `user_id` as user identification, `food_id` as item identification, `User k-NN: k=3, Weighted Knn=false`, and Apply Model IR `n=1/2`, `Online updates=false`. XML is not self-contained; retrieve path must resolve.
 2. Run and export the **native result** to `$out\altair_43_top2.csv` as UTF-8 CSV with `user_id,item_id,rank` headers. The saved XML appends `n=1` and `n=2` branches; export raw output unchanged and state what `n` means in this extension. Do not copy rows from screenshots or deduplicate/re-rank results.
-3. For train-264, import only `datasets/foodrec_offline_train_264.csv`; verify 264 rows and same column types, without another split. Copy the 43 workflow, change Retrieve to this file, retain same role mapping and k-NN settings, and export the `n=1` Apply Model result to `$out\altair_train264_top1.csv` using same UTF-8/header settings. No complete train-264 workflow was supplied. Do not use the 879-row workflows.
+3. For train-264 reruns, import only `datasets/foodrec_offline_train_264.csv`; verify 264 rows and same column types, without another split. Copy the 43 workflow, change Retrieve to this file, retain same role mapping and k-NN settings, and export the `n=1` Apply Model result to a new output path. Existing native export is preserved unchanged at `references/altair_train264_top1.csv`. No complete train-264 workflow was supplied. Do not use the 879-row workflows.
 4. Save the exact workflow used as XML/`.rmp`, plus native CSV. Record Altair/Studio build, recommender extension name/version, input SHA-256, data types, all operator settings (including defaults), and any preprocessing/filtering.
 5. Record unresolved extension semantics: similarity metric and normalization; missing-rating/overlap handling and minimum co-ratings; neighbor eligibility, weighting and tie-breaking; candidate universe and rated-item filtering; prediction/ranking score and tie behavior; cold-start/no-neighbor behavior. `Weighted Knn=false` alone does not answer these. Export selected neighbor IDs, similarities, overlap counts and per-candidate scores/predictions if Altair exposes them; otherwise state that they are unavailable.
 
@@ -45,7 +47,7 @@ Comparison CSV lists each user/item/rank with `MATCH`, `RANK_MISMATCH`, `PYTHON_
 
 ### Evidence to return
 
-- Native Altair CSVs for both datasets, unedited, with headers and every output row.
+- Native Altair CSV for train-264 is already included. Native toy-43 CSV remains unavailable; if rerun, preserve it unedited with headers and every output row.
 - Exact XML/`.rmp` for each run, plus Altair and extension versions.
 - Input checksums, role/data-type mapping, all operator settings/defaults, candidate/filter logic, and any warnings.
 - Neighbor/similarity/overlap and candidate score/prediction breakdowns, if available.
@@ -53,8 +55,8 @@ Comparison CSV lists each user/item/rank with `MATCH`, `RANK_MISMATCH`, `PYTHON_
 - For separate MAE/RMSE work, train on 264 and predict the disjoint 66-row holdout. Do not infer rating error from Top-N ranks.
 
 ## Limitations
-- References are **visually transcribed** output, not original Altair exports. They are not reproducible machine evidence.
+- The train-264 native CSV is preserved, but its workflow and installed Altair/extension versions are unverified. Other references remain **visually transcribed** output, not original exports.
 - 879 source set is highly dense (879/880 possible ratings) and may be synthetic/test data; source provenance not established.
 - Altair model internals, preprocessing, item recommendation score, and custom feature settings still require confirmation. Exact mathematical equivalence is unproven.
-- The train-264 screenshot shows the source and a User k-NN operator, but not a complete workflow. Its transcribed reference is conditional.
+- The train-264 screenshot transcription is historical and separate from the native CSV. No complete train-264 workflow or installed extension build details were supplied.
 - Ranking similarity and rating-prediction accuracy are separate evaluations.

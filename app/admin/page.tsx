@@ -1,6 +1,6 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { ArrowRight, Activity, Database, UtensilsCrossed } from "lucide-react";
+import { ArrowRight, Activity, BookOpenCheck, Database, UtensilsCrossed } from "lucide-react";
 import { Badge, Card, PageHeader } from "@/components/ui";
 import { EngineMonitoring } from "@/components/admin/recommendations/engine-monitoring";
 import { requireAdmin } from "@/lib/authz";
@@ -74,9 +74,10 @@ export default async function AdminDashboard() {
         <div className="max-w-2xl"><span className="inline-flex items-center gap-2 rounded-full bg-white px-3 py-1.5 text-xs font-bold text-accent">Aksi berikutnya</span><h2 className="mb-0 mt-4 text-xl font-extrabold text-gray-950">{nextAction.title}</h2><p className="mb-0 mt-2 text-sm leading-6 text-secondary">{nextAction.description}</p></div>
         <Link href={nextAction.href} className="inline-flex min-h-11 shrink-0 items-center justify-center gap-2 self-start rounded-xl bg-primary px-5 text-sm font-bold text-white hover:bg-primary-hover sm:self-auto"><ActionIcon size={16} aria-hidden="true" />{nextAction.label}<ArrowRight size={16} aria-hidden="true" /></Link>
       </div>
-      <div className="grid border-t border-border sm:grid-cols-3">
+      <div className="grid border-t border-border sm:grid-cols-2 xl:grid-cols-4">
         <ModuleLink icon={UtensilsCrossed} title="Kelola makanan" description="Atur katalog makanan aktif." href="/admin/foods" />
         <ModuleLink icon={Activity} title="Data rating" description="Lihat rating dan snapshot dataset." href="/admin/ratings" />
+        <ModuleLink icon={BookOpenCheck} title="Data penelitian" description="Kelola persetujuan, partisipasi, withdrawal, dan ekspor terpisah." href="/admin/research" />
         <ModuleLink icon={Database} title="Pemrosesan rekomendasi" description="Impor, validasi, tinjau, dan terbitkan hasil." href="/admin/recommendations" />
       </div>
     </Card>

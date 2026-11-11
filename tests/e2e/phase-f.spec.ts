@@ -1,6 +1,6 @@
-import { randomBytes, randomUUID } from "node:crypto";
+import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { spawn, type ChildProcess } from "node:child_process";
-import { mkdir } from "node:fs/promises";
+import { mkdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { expect, test, type Page } from "@playwright/test";
@@ -370,4 +370,82 @@ test("Admin Altair workflow, security gates, and real Python worker-to-PostgreSQ
   await expectNoHorizontalOverflow(page);
   await page.screenshot({ path: path.join(screenshotDir, "user-published-recommendation-mobile.png"), fullPage: true });
   await page.getByRole("button", { name: "Keluar" }).click();
+});
+
+test("Research consent, mobile rating, admin export checksum, and study closure", async ({ page }) => {
+  await login(page, adminEmail, adminPassword);
+  await page.goto("/admin/research");
+  await expect(page.getByRole("heading", { name: "Pengumpulan Data Penelitian" })).toBeVisible();
+  await page.getByRole("button", { name: "Buat penelitian" }).click();
+  const title = `Studi browser ${runId.slice(0, 8)}`;
+  const start = new Date(Date.now() - 60 * 60_000);
+  const close = new Date(Date.now() + 7 * 24 * 60 * 60_000);
+  const retention = new Date(Date.now() + 370 * 24 * 60 * 60_000);
+  const localDateTime = (value: Date) => new Date(value.getTime() - value.getTimezoneOffset() * 60_000).toISOString().slice(0, 16);
+  await page.getByLabel("Judul penelitian").fill(title);
+  await page.getByLabel("Versi persetujuan").fill("v1");
+  await page.getByLabel("Penjelasan singkat").fill("Penelitian uji E2E untuk pengumpulan rating makanan secara sukarela.");
+  await page.getByLabel("Tujuan pengumpulan").fill("Memverifikasi pengalaman persetujuan dan rating penelitian.");
+  await page.getByLabel("Data yang dikumpulkan").fill("Rating 1–5 untuk makanan yang pernah dicoba.");
+  await page.getByLabel("Penggunaan data").fill("Validasi teknis alur terisolasi pada database E2E.");
+  await page.getByLabel("Cara berhenti/menarik data").fill("Buka halaman penelitian dan pilih tarik partisipasi.");
+  await page.getByLabel("Teks persetujuan lengkap (ditampilkan apa adanya)").fill("Saya memahami penelitian dan bersedia ikut secara sukarela.");
+  await page.getByLabel("Nama kontak penelitian").fill("Kontak Uji");
+  await page.getByLabel("Email kontak penelitian").fill("research@example.test");
+  await page.getByLabel("Mulai pengumpulan").fill(localDateTime(start));
+  await page.getByLabel("Tutup pengumpulan").fill(localDateTime(close));
+  await page.getByLabel("Batas retensi data").fill(localDateTime(retention));
+  await page.getByLabel("Kebijakan retensi dan penanganan data").fill("Disimpan sampai batas retensi, lalu pemilik studi meninjau dan menghapus data.");
+  await expectLabeledFormControls(page);
+  await page.getByRole("button", { name: "Buat draft penelitian" }).click();
+  await expect(page.getByRole("heading", { name: title })).toBeVisible();
+  await page.getByRole("button", { name: "Buka pengumpulan" }).click();
+  await expect(page.getByText("OPEN", { exact: true })).toBeVisible();
+
+  await page.getByRole("button", { name: "Keluar" }).click();
+  await login(page, userAEmail, userAPassword);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/research");
+  await expect(page.getByRole("heading", { name: title })).toBeVisible();
+  const consent = page.getByLabel(/Saya telah membaca dokumen persetujuan versi/);
+  await expect(consent).not.toBeChecked();
+  await consent.check();
+  await page.getByRole("button", { name: "Setuju dan lanjutkan" }).click();
+  await expect(page).toHaveURL(/\/research\/rate$/);
+  await page.getByLabel("Cari makanan").fill("Nasi Goreng");
+  const group = page.getByRole("radiogroup", { name: "Rating Nasi Goreng" });
+  await group.getByRole("radio", { name: "4 dari 5, suka" }).check({ force: true });
+  await page.getByLabel("Saya pernah mencoba makanan ini.").check();
+  await page.getByRole("button", { name: "Simpan rating penelitian" }).click();
+  await expect(page.getByRole("status").filter({ hasText: "Rating penelitian tersimpan." })).toBeVisible();
+  await expect(page.getByText(/1 dari \d+ makanan aktif sudah dinilai/)).toBeVisible();
+  await expectNoHorizontalOverflow(page);
+  await page.screenshot({ path: path.join(screenshotDir, "research-rating-mobile.png"), fullPage: true });
+  await page.getByRole("button", { name: "Selesaikan sesi" }).click();
+  await expect(page.getByText(/Terima kasih atas partisipasimu/)).toBeVisible();
+
+  await page.getByRole("button", { name: "Keluar" }).click();
+  await login(page, adminEmail, adminPassword);
+  await page.goto("/admin/research");
+  await expect(page.getByRole("button", { name: "Buat snapshot CSV + manifest" })).toBeVisible();
+  await page.getByRole("button", { name: "Buat snapshot CSV + manifest" }).click();
+  await expect(page.getByText(/Dataset versi 1 dibuat/)).toBeVisible();
+  const [download] = await Promise.all([
+    page.waitForEvent("download"),
+    page.getByRole("link", { name: "CSV" }).click()
+  ]);
+  const savedFile = await download.path();
+  expect(savedFile).toBeTruthy();
+  const csv = await readFile(savedFile!);
+  expect(csv.toString("utf8")).toMatch(/^user_id,food_id,rating\r\n\d+,\d+,4\r\n$/);
+  const checksum = createHash("sha256").update(csv).digest("hex");
+  const manifestHref = await page.getByRole("link", { name: "Manifest" }).first().getAttribute("href");
+  expect(manifestHref).toBeTruthy();
+  const manifestResponse = await page.request.get(new URL(manifestHref!, baseURL).toString());
+  expect(manifestResponse.ok()).toBeTruthy();
+  expect((await manifestResponse.json()).data.sha256).toBe(checksum);
+  await page.getByRole("button", { name: "Tutup pengumpulan" }).click();
+  await expect(page.getByText("CLOSED", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Arsipkan studi" }).click();
+  await expect(page.getByText("ARCHIVED", { exact: true })).toBeVisible();
 });

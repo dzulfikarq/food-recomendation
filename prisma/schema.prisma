@@ -64,6 +64,11 @@ enum ResearchRatingChangeType {
   UPDATED
 }
 
+enum ResearchRatingSource {
+  CONSENTED_USER_ACTION
+  UNVERIFIED_LEGACY
+}
+
 /// Better Auth stores credential hashes in Account.password, not as plaintext on User.
 model User {
   id               Int       @id @default(autoincrement())
@@ -87,6 +92,7 @@ model User {
   researchParticipations ResearchParticipant[] @relation("ResearchParticipantUser")
   researchExports ResearchExport[] @relation("ResearchExportAdmin")
   processedResearchWithdrawals ResearchWithdrawal[] @relation("ResearchWithdrawalAdmin")
+  researchExportRevocations ResearchExportRevocation[]
 }
 
 model Session {
@@ -344,6 +350,8 @@ model ResearchStudy {
   contactEmail           String              @db.VarChar(254)
   startsAt               DateTime
   closesAt               DateTime
+  retentionUntil         DateTime?
+  retentionPolicy        String?             @db.Text
   status                 ResearchStudyStatus @default(DRAFT)
   createdByAdminId       Int
   createdAt              DateTime            @default(now())
@@ -398,6 +406,8 @@ model ResearchRating {
   participantId Int
   foodId        Int
   rating        Int
+  consentVersion String             @db.VarChar(40)
+  source         ResearchRatingSource
   triedAt       DateTime            @default(now())
   createdAt     DateTime            @default(now())
   updatedAt     DateTime            @updatedAt
@@ -416,6 +426,8 @@ model ResearchRatingChange {
   changeType     ResearchRatingChangeType
   oldRating      Int?
   newRating      Int
+  consentVersion String                    @db.VarChar(40)
+  source         ResearchRatingSource
   idempotencyKey String                    @db.VarChar(36)
   createdAt      DateTime                  @default(now())
   participant    ResearchParticipant       @relation(fields: [participantId], references: [id], onDelete: Restrict)
@@ -459,6 +471,7 @@ model ResearchExport {
   study                ResearchStudy       @relation(fields: [studyId], references: [id], onDelete: Restrict)
   createdByAdmin       User                @relation("ResearchExportAdmin", fields: [createdByAdminId], references: [id], onDelete: Restrict)
   participantMemberships ResearchExportParticipant[]
+  revocation       ResearchExportRevocation?
 
   @@unique([studyId, version])
   @@index([createdByAdminId, createdAt])
@@ -474,4 +487,18 @@ model ResearchExportParticipant {
 
   @@id([exportId, participantId])
   @@index([participantId, exportId])
+}
+
+model ResearchExportRevocation {
+  id                        Int           @id @default(autoincrement())
+  exportId                  Int           @unique
+  adminId                   Int
+  note                      String        @db.Text
+  externalRecipientsNotified Boolean
+  fileDeleted               Boolean
+  revokedAt                 DateTime      @default(now())
+  export                    ResearchExport @relation(fields: [exportId], references: [id], onDelete: Restrict)
+  admin                     User           @relation(fields: [adminId], references: [id], onDelete: Restrict)
+
+  @@index([adminId, revokedAt])
 }

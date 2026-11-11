@@ -138,6 +138,7 @@ test("PostgreSQL registration, login, logout, role guards, and database constrai
     const adminHtml = await adminPage.text();
     assert.match(adminHtml, /Administrator/);
     for (const label of ["Makanan aktif", "Pengguna dengan rating", "Total rating", "Dataset ekspor", "Batch aktif", "Publikasi terakhir", "Batch rekomendasi terakhir", "Aksi berikutnya"]) assert.match(adminHtml, new RegExp(label));
+    assert.match(adminHtml, /Recommendation Engine/);
     assert.doesNotMatch(adminHtml, /Segera hadir|direncanakan pada fase berikutnya/);
     assert.equal((await page("/login", adminCookie)).status, 307);
 

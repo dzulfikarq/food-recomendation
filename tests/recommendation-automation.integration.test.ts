@@ -89,6 +89,7 @@ test("rating revisions, locked scheduler, config gate, worker status, and stale 
     const userLogin = await api("/api/auth/sign-in/email", "POST", { email: userA.email, password: "automation-integration-password" });
     assert.equal(userLogin.status, 200);
     const userCookie = cookiesFrom(userLogin);
+    assert.equal((await api("/api/admin/recommendation-engine", "GET", undefined, { cookie: userCookie })).status, 403);
     const ratedFood = await prisma.food.create({ data: {
       foodCode: `AUTO-${randomUUID().slice(0, 8)}`,
       name: "Automation rated food",
@@ -149,10 +150,28 @@ test("rating revisions, locked scheduler, config gate, worker status, and stale 
     }, { cookie: adminCookie });
     assert.equal(createJob.status, 201, await createJob.clone().text());
     const jobId = (await createJob.json()).data.id as string;
+    const pendingMonitorResponse = await api("/api/admin/recommendation-engine", "GET", undefined, { cookie: adminCookie });
+    assert.equal(pendingMonitorResponse.status, 200);
+    const pendingMonitor = (await pendingMonitorResponse.json()).data;
+    const pendingJob = pendingMonitor.recentJobs.find((job: { id: string }) => job.id === jobId);
+    assert.ok(pendingJob, "monitor includes newly queued job");
+    assert.equal(pendingJob.trigger, "MANUAL_ADMIN");
+    assert.equal(pendingJob.status, "PENDING");
+    assert.equal(pendingJob.datasetRevision, dataset.ratingRevision);
+    assert.equal(pendingJob.engineVersion, "python-ubcf-v1");
+    assert.equal(pendingJob.attemptCount, 0);
+    assert.equal(pendingJob.startedAt, null);
+    assert.equal(pendingJob.durationMs, null);
+    assert.equal(pendingJob.artifact, null);
     const claimResponse = await workerApi("/api/internal/recommendation-jobs/claim", "POST", { workerId: "stale-result-worker" }, "stale-result-worker");
     assert.equal(claimResponse.status, 200);
     const claim = (await claimResponse.json()).data;
     assert.equal(claim.id, jobId);
+    const runningMonitor = (await (await api("/api/admin/recommendation-engine", "GET", undefined, { cookie: adminCookie })).json()).data;
+    const runningJob = runningMonitor.recentJobs.find((job: { id: string }) => job.id === jobId);
+    assert.equal(runningJob.status, "RUNNING");
+    assert.equal(runningJob.attemptCount, 1);
+    assert.ok(runningJob.startedAt);
 
     const changedRating = await api(`/api/foods/${ratedFood.id}/rating`, "PUT", { rating: 4 }, { cookie: userCookie });
     assert.equal(changedRating.status, 200);
@@ -170,6 +189,22 @@ test("rating revisions, locked scheduler, config gate, worker status, and stale 
     assert.equal(result.sourceRatingRevision, revisionBeforeScheduler.toString());
     assert.equal(result.currentRatingRevision, changedRevision.toString());
     assert.equal(await prisma.recommendationBatch.count(), batchCount);
+    const completedMonitorResponse = await api("/api/admin/recommendation-engine", "GET", undefined, { cookie: adminCookie });
+    assert.equal(completedMonitorResponse.status, 200);
+    const completedMonitor = (await completedMonitorResponse.json()).data;
+    const completedJob = completedMonitor.recentJobs.find((job: { id: string }) => job.id === jobId);
+    assert.equal(completedJob.status, "SUCCEEDED");
+    assert.ok(completedJob.finishedAt);
+    assert.equal(completedJob.artifact.verificationStatus, "UNVERIFIED");
+    assert.equal(completedJob.artifact.isStale, true);
+    assert.equal(completedJob.durationMs >= 0, true);
+    assert.equal(completedMonitor.configuration.autoProcessingEnabled, false);
+    assert.equal(completedMonitor.configuration.automaticPublicationEnabled, false);
+    assert.equal(completedMonitor.configuration.validationStatus, "PENDING_VALIDATION");
+    assert.equal(completedMonitor.dataset.dirty, true);
+    assert.equal(completedMonitor.lastPublishedBatch === null || typeof completedMonitor.lastPublishedBatch?.id === "number", true);
+    assert.doesNotMatch(JSON.stringify(completedMonitor), /leaseToken|stackTrace|snapshotPath/i);
+    assert.ok(completedMonitor.configuration.lastSuccessfulProcessingAt);
     const automaticPublish = await api(`/api/admin/recommendation-batches/${result.artifactId}/publish`, "POST", {}, { cookie: adminCookie });
     assert.equal(automaticPublish.status, 400);
     assert.ok(await prisma.recommendationEngineConfig.findUniqueOrThrow({ where: { id: 1 } }).then((config) => config.lastSuccessfulProcessingAt));

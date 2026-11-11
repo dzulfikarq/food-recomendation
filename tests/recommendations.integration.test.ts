@@ -71,10 +71,9 @@ test("recommendation import validation, private user results, and concurrent ato
     const workflow = await page("/admin/recommendations", adminCookie);
     assert.equal(workflow.status, 200);
     const workflowHtml = await workflow.text();
-    assert.match(workflowHtml, /Siapkan Dataset/);
-    assert.match(workflowHtml, /Proses di Altair/);
-    assert.match(workflowHtml, /Impor dan Validasi/);
-    assert.match(workflowHtml, /Tinjau dan Publikasikan/);
+    for (const stage of ["Siapkan Dataset", "Unduh CSV", "Jalankan Altair", "Impor hasil", "Validasi hasil", "Publikasikan"]) assert.match(workflowHtml, new RegExp(stage));
+    assert.match(workflowHtml, /Recommendation Engine/);
+    assert.match(workflowHtml, /Pemrosesan Altair tetap manual/);
     assert.equal((await api("/api/admin/recommendation-batches", "GET", undefined, userA.cookie)).status, 403);
     assert.equal((await api("/api/admin/recommendation-batches/import", "POST", new FormData(), userA.cookie)).status, 403);
     assert.equal((await api("/api/me/recommendations", "GET", undefined, adminCookie)).status, 403);

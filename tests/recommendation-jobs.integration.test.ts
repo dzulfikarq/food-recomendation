@@ -178,6 +178,12 @@ test("recommendation jobs enforce auth, atomic leases, retries, immutable snapsh
     assert.equal(timeout.status, 200);
     assert.equal((await timeout.json()).data.status, "FAILED");
     assert.equal(await prisma.recommendationJob.count({ where: { id: thirdAttempt.id, status: "FAILED", attemptCount: 3 } }), 1);
+    const failedMonitorResponse = await api("/api/admin/recommendation-engine", "GET", undefined, { cookie: adminCookie });
+    assert.equal(failedMonitorResponse.status, 200);
+    const failedJob = (await failedMonitorResponse.json()).data.recentJobs.find((job: { id: string }) => job.id === thirdAttempt.id);
+    assert.equal(failedJob.status, "FAILED");
+    assert.equal(failedJob.errorSummary, "Worker attempt timed out.");
+    assert.doesNotMatch(failedJob.errorSummary, /[A-Z]:\\|\/home\/|traceback|exception:/i);
 
     const noPendingWork = await workerApi("/api/internal/recommendation-jobs/claim", "POST", { workerId: "idle-worker" }, "idle-worker");
     assert.equal(noPendingWork.status, 204);

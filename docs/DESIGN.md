@@ -91,5 +91,6 @@ Kecocokan format dengan ekspor penelitian Altair yang sebenarnya tetap **Pending
 - Form memakai label, status/error yang diumumkan screen reader, fokus terlihat, dan status tombol pending.
 - Rating memakai input radio native agar mendukung Tab dan tombol panah; teks skala tidak bergantung pada warna atau ikon.
 - Ikuti preferensi reduced motion yang telah diterapkan stylesheet.
+- Phase F Chromium checks pass for 390px/820px/desktop overflow, visible keyboard focus, form labels, guest mobile login, logout name, and USER/Admin journeys. These are smoke checks, not a full accessibility audit.
 
-Review manual desktop/mobile, keyboard, screen reader, kontras akhir, dan usability dengan pengguna awam tetap perlu dilakukan sebelum menyatakan UX lulus.
+Manual screen-reader, contrast, and usability review with users remains Pending Validation; browser automation does not replace it.

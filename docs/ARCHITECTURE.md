@@ -53,7 +53,10 @@ prisma/
   food-catalog.ts        40 Food seed records
 scripts/
   test-integration.mjs   dedicated `_test` DB migration/seed/test runner
+  test-e2e.mjs           guarded `foodrec_e2e_test` migration/build/Chromium runner; no reset
   run-recommender-worker.ps1 Windows PowerShell local worker launcher
+playwright.config.ts    production-server Chromium E2E configuration
+tests/e2e/              Guest/USER/Admin journeys and real Python worker/PostgreSQL lifecycle
 services/recommender/
   pyproject.toml         Python project; no runtime dependencies
   src/engine/            pure Cosine, user k-NN, prediction, Top-N
@@ -138,3 +141,5 @@ Results persist as JSONB `RecommendationJobArtifact` with DB-enforced `verificat
 `GET/PATCH /api/admin/recommendation-engine` exposes safe config and read-only monitoring: gate reasons, dirty revision state, scheduler times/outcome, pending/running/failed counts, last successful execution, and worker heartbeat online status. No dashboard redesign is included in Phase D.
 
 Phase B remains **Pending Validation** mathematically: 43-rating screenshot transcription matches 5/5 rows; train-264 Top-1 item IDs match 0/22. Original exports, full 264 workflow settings, and intermediate score/neighbor evidence remain unavailable.
+
+Phase F QA ran Playwright against isolated `foodrec_e2e_test` and the actual local Python worker. The runner asserts an `_test` target before each Prisma/Next/Playwright child process, applies migrations/seeds without reset, and builds into a separate Next dist directory. PostgreSQL confirms worker `SUCCEEDED` with a stale `UNVERIFIED` artifact; no batch is created or published. Browser checks establish app-flow readiness only, not Altair parity or production readiness. See [`PHASE_F_VERIFICATION.md`](PHASE_F_VERIFICATION.md).

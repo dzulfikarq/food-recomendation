@@ -10,8 +10,9 @@ FoodRec membantu pengguna menjelajahi makanan, menyimpan rating, dan melihat rek
 - **Automatic processing:** OFF. Mathematical parity **Pending Validation**; 43-rating output **MATCHED OUTPUT**, train-264 Top-1 **MISMATCH**. Screenshot transcription is not original Altair export.
 - **Admin monitoring:** actual dataset revision, job status/detail, worker heartbeat TTL, last successful computation, last published batch, and locked validation gate. Computed, verified, and published outcomes remain distinct.
 - **Admin workflow:** statistik database dan enam tahap Siapkan Dataset → Unduh CSV → Jalankan Altair manual → Impor Hasil → Validasi → Publikasikan; filter/pencarian riwayat dan checksum dipertahankan.
-- **Automated checks:** Python suite (24 tests), `npm test` (14 tests), lint, typecheck, build, and six PostgreSQL integration suites pass on isolated `foodrec_test`. Browser E2E not run; manual visual/accessibility review pending.
-- **Pending Validation:** round-trip dengan file hasil Altair penelitian sesungguhnya, production database/storage, security/performance production, serta review visual, keyboard, dan screen reader lintas perangkat.
+- **Phase F QA:** 4/4 Playwright Chromium journeys and 6/6 PostgreSQL integration suites pass on separate `_test` databases. Guest/USER/Admin journeys and real Python worker-to-PostgreSQL job verified; artifacts remain `UNVERIFIED`, automation/publication OFF.
+- **Automated checks:** Python (24 tests), `npm test` (15), lint, typecheck, Prisma validate, build, PostgreSQL integration, and browser E2E pass. Production `npm audit --omit=dev` reports one moderate `fast-uri` vulnerability.
+- **Pending Validation:** mathematical parity and real Altair export round-trip, production security/performance/database/storage, plus manual screen-reader/contrast/usability review. Evidence/readiness: [`docs/PHASE_F_VERIFICATION.md`](docs/PHASE_F_VERIFICATION.md).
 - **Manual research workflow:** UBCF, Cosine Similarity, dan user k-NN tetap dapat dijalankan di Altair AI Studio Educational 2026.1.1; existing CSV validation/publication tetap berlaku.
 
 Guest dapat melihat katalog aktif dan membuat akun. Setelah masuk, USER mendapat beranda personal, dapat menjelajahi `/foods`, memberi atau memperbarui rating 1–5, melihat `/my-ratings`, dan membuka `/recommendations`. Hasil hanya tampil setelah admin menerbitkan batch yang mencakup user; menyimpan rating tidak memicu pemrosesan otomatis. Dashboard admin dan pengelolaan katalog, snapshot, impor, validasi, publikasi, serta audit tersedia di `/admin`. Detail status dan batas validasi: [`docs/ROADMAP.md`](docs/ROADMAP.md).
@@ -21,6 +22,7 @@ Guest dapat melihat katalog aktif dan membuat akun. Setelah masuk, USER mendapat
 - Node.js 20.19+ dan npm.
 - PostgreSQL 15+ lokal, atau Docker Compose.
 - Python 3.11+ untuk Recommendation Engine tests.
+- Chrome/Chromium untuk Playwright E2E; set `FOODREC_CHROME_PATH` if executable is not at default Windows path.
 
 ## Setup development
 
@@ -85,6 +87,8 @@ npm run test:integration
 
 Script memerlukan production build, menerapkan migration dan seed pada database `_test`; tidak melakukan reset. Test menambah FoodImport/DatasetExport/RecommendationBatch audit records serta fixture user/food yang terikat histori; database `_test` harus terpisah dari DB development.
 
+Browser E2E uses separate `foodrec_e2e_test` (or `FOODREC_E2E_DATABASE_URL` ending in `_test`), applies migrations/seeds without reset, builds production app, then runs Chromium. It creates user/rating/snapshot/batch/job fixtures; never target primary data. Set `FOODREC_CHROME_PATH` to select a Chrome/Chromium executable. Run `npm run test:e2e`.
+
 Python tests memakai stdlib, tanpa runtime dependency tambahan:
 
 ```powershell
@@ -102,8 +106,9 @@ python -m unittest discover -s tests -v
 | `npm run start` | Jalankan production build |
 | `npm run lint` | ESLint |
 | `npm run typecheck` | TypeScript check |
-| `npm test` | Unit test validasi autentikasi |
+| `npm test` | Auth, food-query, and CSV unit tests |
 | `npm run test:integration` | PostgreSQL/Auth/Food/Rating/Recommendation/automation integration; perlu DB `_test` dan port `3101`–`3106` kosong |
+| `npm run test:e2e` | Guest/USER/Admin Chromium journeys and real Python worker; isolated `foodrec_e2e_test`, no reset |
 | `npm run db:generate` | Generate Prisma Client |
 | `npm run db:migrate` | Terapkan/dev migration PostgreSQL |
 | `npm run db:migrate:deploy` | Terapkan migration pada deployment |
@@ -135,3 +140,4 @@ Validasi memakai PostgreSQL 17 terisolasi. Docker tidak tersedia di environment 
 - [`docs/DECISIONS.md`](docs/DECISIONS.md) — keputusan dan batasan.
 - [`docs/DESIGN.md`](docs/DESIGN.md) — user flow, halaman, komponen, dan prinsip UX FoodRec.
 - [`docs/RECOMMENDATION_ENGINE_VALIDATION.md`](docs/RECOMMENDATION_ENGINE_VALIDATION.md) — rumus, synthetic fixture, dan status parity Altair.
+- [`docs/PHASE_F_VERIFICATION.md`](docs/PHASE_F_VERIFICATION.md) — Phase F evidence, readiness, test targets, and safety incident.

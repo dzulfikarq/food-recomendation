@@ -83,6 +83,14 @@ This check does **not** call Top-N. For each of 66 test pairs, it selects neighb
 - Mathematical parity: **Pending Validation**. Needed: original exported Altair outputs, confirmed 264 process XML and extension settings, plus similarity/neighbor/prediction scores and tie behavior.
 - Automatic processing: **OFF**. Do not open publication/automation gate from screenshot ranking match.
 
+## Phase F QA evidence (2026-11-11)
+
+- 4/4 Playwright Chromium journeys pass against isolated `foodrec_e2e_test`; 6/6 PostgreSQL integration suites pass against isolated `foodrec_test`.
+- Real Python worker claimed a manual job and wrote `SUCCEEDED` with an `UNVERIFIED` artifact. Rating revision changed after snapshot, so artifact was correctly marked stale. E2E verified no batch count change and that artifact publication is rejected.
+- API attempts to enable automation or enqueue an automatic job were rejected; database config remained `autoProcessingEnabled=false`, `automaticPublicationEnabled=false`, `validationStatus=PENDING_VALIDATION`.
+- This validates queue, API, browser controls, and staging boundary only. It does **not** validate algorithm parity. 43-rating output stays **MATCHED OUTPUT**; train-264 Top-1 stays **MISMATCH**; mathematical parity and real Altair export remain **Pending Validation**.
+- Production `npm audit --omit=dev` reports one moderate advisory in transitive `fast-uri`; see [`PHASE_F_VERIFICATION.md`](PHASE_F_VERIFICATION.md).
+
 ## Run unit tests
 
 From repository root:

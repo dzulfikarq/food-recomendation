@@ -1,4 +1,5 @@
 import pg from "pg";
+import { before } from "node:test";
 
 const testUrl = process.env.FOODREC_TEST_DATABASE_URL;
 if (!testUrl) throw new Error("Set FOODREC_TEST_DATABASE_URL to an isolated PostgreSQL database ending in _test.");
@@ -18,16 +19,18 @@ if (!/^[a-zA-Z0-9_]{1,63}$/.test(testDatabase) || !testDatabase.endsWith("_test"
   throw new Error("Integration tests require a distinct _test database on the configured PostgreSQL target.");
 }
 
-const client = new pg.Client({ connectionString: testUrl });
-await client.connect();
-try {
-  const { rows: [identity] } = await client.query("SELECT current_database() AS database, current_user AS username");
-  if (identity.database !== testDatabase || identity.username !== decodeURIComponent(target.username)) {
-    throw new Error(`Refusing integration target: connected to ${identity.database} as ${identity.username}.`);
+before(async () => {
+  const client = new pg.Client({ connectionString: testUrl });
+  await client.connect();
+  try {
+    const { rows: [identity] } = await client.query("SELECT current_database() AS database, current_user AS username");
+    if (identity.database !== testDatabase || identity.username !== decodeURIComponent(target.username)) {
+      throw new Error(`Refusing integration target: connected to ${identity.database} as ${identity.username}.`);
+    }
+  } finally {
+    await client.end();
   }
-} finally {
-  await client.end();
-}
+});
 
 Reflect.set(process.env, "DATABASE_URL", testUrl);
 

@@ -26,6 +26,14 @@ enum RecommendationBatchStatus {
   SUPERSEDED
 }
 
+enum RecommendationJobStatus {
+  PENDING
+  RUNNING
+  SUCCEEDED
+  FAILED
+  CANCELLED
+}
+
 /// Better Auth stores credential hashes in Account.password, not as plaintext on User.
 model User {
   id               Int       @id @default(autoincrement())
@@ -44,6 +52,7 @@ model User {
   batches          RecommendationBatch[] @relation("RecommendationBatchAdmin")
   publishedBatches RecommendationBatch[] @relation("RecommendationBatchPublisher")
   recommendations Recommendation[] @relation("RecommendationUser")
+  recommendationJobs RecommendationJob[] @relation("RecommendationJobCreator")
 }
 
 model Session {
@@ -158,6 +167,7 @@ model DatasetExport {
   createdAt    DateTime @default(now())
   admin        User     @relation("DatasetExportAdmin", fields: [adminId], references: [id], onDelete: Restrict)
   batches      RecommendationBatch[]
+  recommendationJobs RecommendationJob[]
 
   @@index([adminId, createdAt])
   @@index([fileChecksum])
@@ -187,6 +197,48 @@ model RecommendationBatch {
   @@index([adminId, createdAt])
   @@index([publishedById])
   @@index([status, publishedAt])
+}
+
+model RecommendationJob {
+  id                String                   @id @default(uuid()) @db.Uuid
+  datasetExportId   Int
+  createdByAdminId  Int
+  trigger           String                   @default("MANUAL_ADMIN") @db.VarChar(40)
+  idempotencyKey    String                   @unique @db.VarChar(100)
+  engineVersion     String                   @db.VarChar(40)
+  parameters        Json                     @db.JsonB
+  status            RecommendationJobStatus  @default(PENDING)
+  attemptCount      Int                      @default(0)
+  maxAttempts       Int                      @default(3)
+  timeoutSeconds    Int                      @default(900)
+  nextAttemptAt     DateTime                 @default(now())
+  leaseToken        String?                  @db.Uuid
+  leaseExpiresAt    DateTime?
+  timeoutAt         DateTime?
+  workerId          String?                  @db.VarChar(120)
+  heartbeatAt       DateTime?
+  createdAt         DateTime                 @default(now())
+  startedAt         DateTime?
+  finishedAt        DateTime?
+  errorSummary      String?                  @db.VarChar(255)
+  datasetExport     DatasetExport            @relation(fields: [datasetExportId], references: [id], onDelete: Restrict)
+  createdByAdmin    User                     @relation("RecommendationJobCreator", fields: [createdByAdminId], references: [id], onDelete: Restrict)
+  artifact          RecommendationJobArtifact?
+
+  @@index([status, nextAttemptAt, createdAt])
+  @@index([datasetExportId, createdAt])
+  @@index([status, leaseExpiresAt])
+}
+
+model RecommendationJobArtifact {
+  id                 String             @id @default(uuid()) @db.Uuid
+  jobId              String             @unique @db.Uuid
+  verificationStatus String             @default("UNVERIFIED") @db.VarChar(20)
+  checksum           String             @db.VarChar(64)
+  rowCount           Int
+  payload            Json               @db.JsonB
+  createdAt          DateTime           @default(now())
+  job                RecommendationJob @relation(fields: [jobId], references: [id], onDelete: Restrict)
 }
 
 model Recommendation {

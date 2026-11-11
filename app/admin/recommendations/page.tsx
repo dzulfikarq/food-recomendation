@@ -4,6 +4,7 @@ import { ArrowLeft, ArrowRight, BarChart3, Check, Download, FileDown, Search } f
 import { CreateDatasetExport } from "@/components/admin/ratings/create-dataset-export";
 import { RecommendationImportForm } from "@/components/admin/recommendations/recommendation-import-form";
 import { PublishRecommendationBatch } from "@/components/admin/recommendations/publish-recommendation-batch";
+import { EngineMonitoring } from "@/components/admin/recommendations/engine-monitoring";
 import { RecommendationValidationReportView } from "@/components/admin/recommendations/validation-report";
 import { Alert, Badge, Card, PageHeader } from "@/components/ui";
 import type { Prisma } from "@/generated/prisma/client";
@@ -82,21 +83,26 @@ export default async function AdminRecommendationsPage({ searchParams }: { searc
   });
   const latestReport = latestBatch?.validationReport as unknown as RecommendationValidationReport | null;
   const hasValidationErrors = Boolean(latestReport?.errors.length);
+  const hasRecommendations = (latestReport?.summary.recommendationCount ?? 0) > 0;
   const batchMatchesLatestDataset = Boolean(latestDataset && latestBatch?.datasetExport.id === latestDataset.id);
-  const currentStep = !latestDataset || snapshotStale ? 1 : !batchMatchesLatestDataset ? 2 : latestBatch?.status === "DRAFT" ? 3 : 4;
+  const currentStep = !latestDataset || snapshotStale ? 1 : !batchMatchesLatestDataset ? 3 : latestBatch?.status === "DRAFT" ? 5 : 6;
   const stepOneStatus = latestDataset ? snapshotStale ? "Perlu snapshot baru" : "Snapshot tersedia" : ratingCount ? "Siap dibuat" : "Menunggu rating";
-  const stepTwoStatus = batchMatchesLatestDataset ? "CSV hasil diimpor" : latestDataset ? "Menunggu CSV hasil" : "Menunggu snapshot";
-  const stepThreeStatus = batchMatchesLatestDataset && latestBatch ? statusLabel[latestBatch.status] : latestDataset ? "Menunggu file hasil" : "Menunggu snapshot";
-  const stepFourStatus = batchMatchesLatestDataset && latestBatch?.status === "VALIDATED" ? hasValidationErrors ? "Perlu validasi ulang" : "Siap dipublikasikan" : latestBatch?.status === "PUBLISHED" ? "Diterbitkan" : latestBatch?.status === "SUPERSEDED" ? "Digantikan" : activeBatch ? "Batch aktif tersedia" : "Menunggu hasil valid";
+  const stepTwoStatus = latestDataset ? "CSV siap diunduh" : "Menunggu snapshot";
+  const stepThreeStatus = batchMatchesLatestDataset ? "CSV hasil diterima" : "Menunggu hasil Altair";
+  const stepFourStatus = batchMatchesLatestDataset ? "File hasil masuk" : "Menunggu file hasil";
+  const stepFiveStatus = !batchMatchesLatestDataset ? "Menunggu impor hasil" : latestBatch?.status === "DRAFT" || hasValidationErrors ? "Perlu perbaikan" : hasRecommendations ? "Validasi selesai" : "Tidak ada rekomendasi";
+  const stepSixStatus = batchMatchesLatestDataset && latestBatch?.status === "PUBLISHED" ? "Sudah diterbitkan" : batchMatchesLatestDataset && latestBatch?.status === "SUPERSEDED" ? "Batch digantikan" : batchMatchesLatestDataset && latestBatch?.status === "VALIDATED" && !hasValidationErrors && hasRecommendations ? "Siap diterbitkan" : activeBatch ? "Batch aktif tersedia" : "Menunggu hasil valid";
   const datasetIsComplete = Boolean(latestDataset && !snapshotStale);
   const resultHasBeenUploaded = batchMatchesLatestDataset;
   const resultIsValid = Boolean(resultHasBeenUploaded && latestBatch?.status !== "DRAFT" && latestReport && !hasValidationErrors && (latestReport.summary.recommendationCount ?? 0) > 0);
   const publicationIsComplete = Boolean(resultIsValid && (latestBatch?.status === "PUBLISHED" || latestBatch?.status === "SUPERSEDED"));
   const workflow = [
     { number: 1, title: "Siapkan dataset", status: stepOneStatus, complete: datasetIsComplete },
-    { number: 2, title: "Proses di Altair", status: stepTwoStatus, complete: resultHasBeenUploaded },
-    { number: 3, title: "Impor dan validasi", status: stepThreeStatus, complete: resultIsValid },
-    { number: 4, title: "Tinjau dan publikasikan", status: stepFourStatus, complete: publicationIsComplete }
+    { number: 2, title: "Unduh CSV", status: stepTwoStatus, complete: datasetIsComplete },
+    { number: 3, title: "Jalankan Altair", status: stepThreeStatus, complete: resultHasBeenUploaded },
+    { number: 4, title: "Impor hasil", status: stepFourStatus, complete: resultHasBeenUploaded },
+    { number: 5, title: "Validasi hasil", status: stepFiveStatus, complete: resultIsValid },
+    { number: 6, title: "Publikasikan", status: stepSixStatus, complete: publicationIsComplete }
   ];
 
   function historyHref(targetPage: number) {
@@ -108,9 +114,9 @@ export default async function AdminRecommendationsPage({ searchParams }: { searc
   }
 
   return <>
-    <PageHeader eyebrow="PANDUAN ADMIN" title="Pemrosesan Rekomendasi" description="Ikuti empat tahap dari snapshot rating sampai rekomendasi diterbitkan. Perhitungan User-Based Collaborative Filtering dengan Cosine Similarity tetap dilakukan manual di Altair; FoodRec hanya mengelola CSV dan publikasi." />
+    <PageHeader eyebrow="PANDUAN ADMIN" title="Pemrosesan Rekomendasi" description="Ikuti enam tahap dari menyiapkan data sampai menerbitkan rekomendasi. Perhitungan tetap dilakukan manual di Altair; FoodRec mengelola file, validasi, dan publikasi." />
 
-    <nav aria-label="Tahap pemrosesan rekomendasi" className="mb-6 grid grid-cols-2 gap-2 sm:grid-cols-4">
+    <nav aria-label="Tahap pemrosesan rekomendasi" className="mb-6 grid grid-cols-2 gap-2 md:grid-cols-3 xl:grid-cols-6">
       {workflow.map((step) => {
         const current = step.number === currentStep;
         return <a key={step.number} href={`#step-${step.number}`} aria-current={current ? "step" : undefined} className={`flex min-h-20 items-start gap-2 rounded-xl border p-3 text-left transition-colors ${current ? "border-primary bg-orange-50" : step.complete ? "border-green-200 bg-green-50/50" : "border-border bg-white hover:border-orange-200 hover:bg-soft"}`}>
@@ -120,9 +126,11 @@ export default async function AdminRecommendationsPage({ searchParams }: { searc
       })}
     </nav>
 
+    <EngineMonitoring />
+
     <div className="space-y-5">
       <section id="step-1" aria-labelledby="step-1-title" className="scroll-mt-24">
-        <WorkflowStep number="1" title="Siapkan Dataset" status={stepOneStatus} current={currentStep === 1} complete={datasetIsComplete} description="Dataset adalah salinan rating pada satu waktu. Snapshot privat ini menjaga agar proses dan hasil penelitian punya sumber data yang jelas." next="Unduh snapshot yang dipilih, lalu lanjutkan pemrosesan manual di Altair.">
+        <WorkflowStep number="1" title="Siapkan Dataset" status={stepOneStatus} current={currentStep === 1} complete={datasetIsComplete} description="Dataset adalah salinan rating pada satu waktu. Snapshot privat ini menjaga agar proses dan hasil penelitian punya sumber data yang jelas." next="Unduh snapshot pada tahap 2, lalu lanjutkan pemrosesan manual di Altair.">
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
             <SummaryCard label="Pengguna dengan rating" value={ratedUsers.length} />
             <SummaryCard label="Makanan aktif" value={activeFoodCount} />
@@ -133,21 +141,28 @@ export default async function AdminRecommendationsPage({ searchParams }: { searc
           {snapshotStale && <Alert variant="info">Rating berubah setelah snapshot terakhir. Buat snapshot baru bila proses berikutnya perlu memakai data terkini; snapshot lama tetap tersedia untuk audit.</Alert>}
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div>{latestDataset ? <p className="m-0 text-sm text-secondary">Snapshot terakhir: <strong className="text-gray-900">#{latestDataset.id} · {latestDataset.filename}</strong><br />{latestDataset.rowCount} rating · {formatDate(latestDataset.createdAt)}</p> : <p className="m-0 text-sm text-secondary">{ratingCount ? "Belum ada snapshot. Buat satu untuk memulai." : "Belum ada rating yang bisa dimasukkan ke snapshot."}</p>}</div>
-            <div className="flex flex-wrap items-center gap-2"><CreateDatasetExport ratingCount={ratingCount} />{latestDataset && <a href={`/api/admin/rating-datasets/${latestDataset.id}/download`} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-border bg-white px-4 text-sm font-semibold text-gray-800 hover:bg-gray-50"><Download size={15} aria-hidden="true" />Unduh dataset</a>}</div>
+            <CreateDatasetExport ratingCount={ratingCount} />
           </div>
           {datasets.length > 0 && <details className="rounded-xl border border-border bg-gray-50">
             <summary className="cursor-pointer px-4 py-3 text-sm font-semibold text-gray-800 focus-visible:outline-2 focus-visible:outline-primary">Snapshot tersedia · {datasetCount} tersimpan (menampilkan 50 terbaru)</summary>
             <ul className="m-0 max-h-64 list-none space-y-2 overflow-auto border-t border-border p-3">{datasets.map((dataset) => <li key={dataset.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-white px-3 py-2 text-xs"><span className="text-gray-700">#{dataset.id} · {dataset.filename} · {dataset.rowCount} rating · {formatDate(dataset.createdAt)}</span><a href={`/api/admin/rating-datasets/${dataset.id}/download`} className="inline-flex min-h-8 items-center gap-1 font-semibold text-primary hover:underline"><Download size={13} aria-hidden="true" />Unduh</a></li>)}</ul>
-            <p className="m-0 border-t border-border px-3 py-2 text-xs text-secondary">Pilih snapshot sumber saat mengimpor CSV pada tahap 3. <Link href="/admin/ratings" className="font-semibold text-primary underline">Buka semua Data Rating</Link>.</p>
+            <p className="m-0 border-t border-border px-3 py-2 text-xs text-secondary">Pilih snapshot sumber saat mengimpor CSV pada tahap 4. <Link href="/admin/ratings" className="font-semibold text-primary underline">Buka semua Data Rating</Link>.</p>
           </details>}
         </WorkflowStep>
       </section>
 
       <section id="step-2" aria-labelledby="step-2-title" className="scroll-mt-24">
-        <WorkflowStep number="2" title="Proses di Altair" status={stepTwoStatus} current={currentStep === 2} complete={resultHasBeenUploaded} description="Tahap ini dilakukan di aplikasi Altair, di luar FoodRec. FoodRec tidak menjalankan algoritme dan tidak dapat memastikan proses eksternal selesai sampai file hasil diunggah." next="Ekspor file hasil, lalu kembali dan unggah pada tahap 3.">
+        <WorkflowStep number="2" title="Unduh CSV" status={stepTwoStatus} complete={datasetIsComplete} description="CSV adalah salinan rating pada snapshot. Unduh file yang akan dipakai agar proses Altair dan hasilnya merujuk ke dataset yang sama." next="Setelah mengunduh, jalankan penelitian secara manual di Altair.">
+          {latestDataset ? <div className="flex flex-col gap-3 rounded-xl border border-border bg-gray-50 p-4 sm:flex-row sm:items-center sm:justify-between"><p className="m-0 min-w-0 text-sm text-gray-700"><strong className="text-gray-950">Snapshot #{latestDataset.id}</strong> · {latestDataset.filename}<span className="block text-xs text-secondary">{latestDataset.rowCount} rating · dibuat {formatDate(latestDataset.createdAt)}</span></p><a href={`/api/admin/rating-datasets/${latestDataset.id}/download`} className="inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-xl border border-border bg-white px-4 text-sm font-semibold text-gray-800 hover:bg-gray-50"><Download size={15} aria-hidden="true" />Unduh CSV</a></div> : <div className="rounded-xl border border-dashed border-border bg-gray-50 p-4"><p className="m-0 text-sm text-secondary">Belum ada snapshot untuk diunduh.</p><Link href="#step-1" className="mt-3 inline-flex min-h-10 items-center gap-2 rounded-xl bg-primary px-4 text-sm font-bold text-white hover:bg-primary-hover"><FileDown size={15} aria-hidden="true" />Siapkan dataset</Link></div>}
+          {snapshotStale && <Alert variant="info">Snapshot ini dibuat sebelum rating terbaru. Snapshot lama tetap dapat diunduh untuk audit; buat snapshot baru di tahap 1 untuk memakai semua perubahan rating.</Alert>}
+        </WorkflowStep>
+      </section>
+
+      <section id="step-3" aria-labelledby="step-3-title" className="scroll-mt-24">
+        <WorkflowStep number="3" title="Jalankan Altair" status={stepThreeStatus} current={currentStep === 3} complete={resultHasBeenUploaded} description="Tahap ini dilakukan di aplikasi Altair, di luar FoodRec. FoodRec tidak menjalankan algoritme dan tidak dapat memastikan proses eksternal selesai sampai file hasil diimpor." next="Ekspor hasil, lalu kembali dan masukkan CSV pada tahap 4.">
           <ol className="m-0 grid list-none gap-3 p-0 sm:grid-cols-2">
             {[
-              "Unduh CSV snapshot dari tahap 1.",
+              "Unduh CSV snapshot dari tahap 2.",
               "Buka Altair AI Studio dan impor dataset rating.",
               "Periksa kolom input: user_id, food_id, rating. File tidak memuat nama atau email.",
               "Jalankan User-Based Collaborative Filtering dengan Cosine Similarity dan user k-NN sesuai protokol penelitian.",
@@ -155,7 +170,6 @@ export default async function AdminRecommendationsPage({ searchParams }: { searc
               "Catat nilai k dan Top-N yang benar-benar dipakai, lalu kembali ke FoodRec."
             ].map((instruction, index) => <li key={instruction} className="flex gap-3 rounded-xl border border-border bg-white p-3 text-sm leading-6 text-gray-700"><span className="grid size-7 shrink-0 place-items-center rounded-full bg-soft text-xs font-bold text-primary">{index + 1}</span><span>{instruction}</span></li>)}
           </ol>
-          {latestDataset ? <a href={`/api/admin/rating-datasets/${latestDataset.id}/download`} className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-border bg-white px-4 text-sm font-bold text-gray-800 hover:bg-gray-50"><Download size={16} aria-hidden="true" />Unduh snapshot terbaru</a> : <Link href="#step-1" className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-border bg-white px-4 text-sm font-bold text-gray-800 hover:bg-gray-50"><FileDown size={16} aria-hidden="true" />Buat snapshot terlebih dahulu</Link>}
           <details className="rounded-xl border border-border bg-gray-50">
             <summary className="cursor-pointer px-4 py-3 text-sm font-semibold text-gray-800 focus-visible:outline-2 focus-visible:outline-primary">Penjelasan parameter dan format CSV</summary>
             <div className="grid gap-4 border-t border-border p-4 text-sm leading-6 text-secondary sm:grid-cols-2">
@@ -167,28 +181,39 @@ export default async function AdminRecommendationsPage({ searchParams }: { searc
         </WorkflowStep>
       </section>
 
-      <section id="step-3" aria-labelledby="step-3-title" className="scroll-mt-24">
-        <WorkflowStep number="3" title="Impor dan Validasi" status={stepThreeStatus} current={currentStep === 3} complete={resultIsValid} description="Pilih snapshot yang dipakai, unggah CSV hasil, lalu isi parameter yang benar-benar digunakan di Altair. FoodRec memeriksa file dan menyimpan batch sebagai Draft atau Tervalidasi; belum ada hasil yang diterbitkan." next="Jika ada kesalahan, perbaiki CSV berdasarkan laporan lalu unggah ulang. Hanya hasil tervalidasi dapat dipublikasikan.">
+      <section id="step-4" aria-labelledby="step-4-title" className="scroll-mt-24">
+        <WorkflowStep number="4" title="Impor hasil" status={stepFourStatus} complete={resultHasBeenUploaded} description="Pilih snapshot sumber dan unggah CSV yang diekspor dari Altair. Masukkan nilai k dan Top-N yang benar-benar dipakai; jangan menebak parameter penelitian." next="FoodRec menerima file lalu memeriksa format dan isi pada tahap 5.">
           <RecommendationImportForm datasets={datasets.map(({ id, filename, rowCount, createdAt }) => ({ id, filename, rowCount, createdAt: createdAt.toISOString() }))} />
         </WorkflowStep>
       </section>
 
-      <section id="step-4" aria-labelledby="step-4-title" className="scroll-mt-24">
-        <WorkflowStep number="4" title="Tinjau dan Publikasikan" status={stepFourStatus} current={currentStep === 4} complete={publicationIsComplete} description="Periksa preview rekomendasi, snapshot sumber, parameter, dan peringatan. Publikasi hanya berhasil untuk batch valid dan tidak kosong; batch aktif sebelumnya menjadi Digantikan dan riwayat tetap disimpan." next="Setelah berhasil, buka detail batch untuk audit. USER hanya melihat hasil yang sesuai dengan akun mereka.">
-          {latestBatch ? <div className="space-y-4">
+      <section id="step-5" aria-labelledby="step-5-title" className="scroll-mt-24">
+        <WorkflowStep number="5" title="Validasi hasil" status={stepFiveStatus} current={currentStep === 5} complete={resultIsValid} description="FoodRec memeriksa format, pengguna dan makanan sumber, urutan, serta jumlah rekomendasi. Hasil validasi tidak sama dengan bukti kesesuaian matematis terhadap penelitian Altair." next="Perbaiki kesalahan bila ada. Hasil valid dan tidak kosong dapat ditinjau pada tahap 6.">
+          {batchMatchesLatestDataset && latestBatch ? <div className="space-y-4">
             <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-gray-50 p-4">
               <div><p className="m-0 text-sm font-bold text-gray-900">Batch #{latestBatch.id} · {latestBatch.filename ?? "File lama"}</p><p className="mb-0 mt-1 text-xs text-secondary">Dataset #{latestBatch.datasetExport.id} · diterima FoodRec {formatDate(latestBatch.createdAt)}</p></div>
               <Badge className={statusClass[latestBatch.status] ?? ""}>{statusLabel[latestBatch.status] ?? latestBatch.status}</Badge>
             </div>
             {latestReport && <RecommendationValidationReportView report={latestReport} />}
-            {latestBatch.status === "VALIDATED" && !hasValidationErrors && (latestReport?.summary.recommendationCount ?? 0) > 0 && <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-green-200 bg-green-50 p-4"><div><p className="m-0 text-sm font-bold text-green-900">{latestReport?.summary.recommendationCount} rekomendasi siap ditinjau.</p><p className="mb-0 mt-1 text-xs text-green-800">Konfirmasi publikasi untuk mengganti batch aktif.</p></div><PublishRecommendationBatch batchId={latestBatch.id} /></div>}
             {latestBatch.status === "VALIDATED" && (latestReport?.summary.recommendationCount ?? 0) === 0 && <Alert>Batch kosong tidak dapat diterbitkan. Impor file yang berisi setidaknya satu rekomendasi valid.</Alert>}
-            {latestBatch.status === "VALIDATED" && hasValidationErrors && <Alert>Validasi terbaru menemukan masalah. Periksa laporan, lalu impor ulang hasil yang diperbaiki dari tahap 3 sebelum publikasi.</Alert>}
-            {latestBatch.status === "DRAFT" && <Alert>Batch belum valid. Perbaiki kesalahan pada laporan di atas, lalu unggah ulang CSV pada tahap 3.</Alert>}
+            {latestBatch.status === "VALIDATED" && hasValidationErrors && <Alert>Validasi terbaru menemukan masalah. Periksa laporan, lalu impor ulang hasil yang diperbaiki dari tahap 4 sebelum publikasi.</Alert>}
+            {latestBatch.status === "DRAFT" && <Alert>Batch belum valid. Perbaiki kesalahan pada laporan di atas, lalu unggah ulang CSV pada tahap 4.</Alert>}
+            {latestBatch.status === "VALIDATED" && !hasValidationErrors && (latestReport?.summary.recommendationCount ?? 0) > 0 && <Alert variant="info">Validasi FoodRec selesai. Ini pemeriksaan struktur dan sumber data, bukan konfirmasi mathematical parity terhadap Altair.</Alert>}
+            <Link href={`/admin/recommendations/${latestBatch.id}`} className="inline-flex min-h-9 items-center gap-2 text-sm font-semibold text-primary hover:underline">Buka detail validasi<ArrowRight size={15} aria-hidden="true" /></Link>
+          </div> : <div className="rounded-xl border border-dashed border-border bg-gray-50 p-5"><p className="m-0 text-sm font-semibold text-gray-900">Belum ada hasil untuk snapshot terbaru.</p><p className="mb-0 mt-1 text-sm leading-6 text-secondary">Selesaikan tahap 1–4 terlebih dahulu. Pemrosesan Altair tetap dilakukan manual.</p><Link href="#step-4" className="mt-4 inline-flex min-h-10 items-center gap-2 rounded-xl bg-primary px-4 text-sm font-bold text-white hover:bg-primary-hover">Ke impor hasil<ArrowRight size={15} aria-hidden="true" /></Link></div>}
+        </WorkflowStep>
+      </section>
+
+      <section id="step-6" aria-labelledby="step-6-title" className="scroll-mt-24">
+        <WorkflowStep number="6" title="Publikasikan" status={stepSixStatus} current={currentStep === 6} complete={publicationIsComplete} description="Publikasi manual hanya tersedia untuk batch valid yang berisi rekomendasi. Setelah publikasi, batch aktif sebelumnya menjadi riwayat dan pengguna hanya melihat hasil yang sesuai dengan akunnya." next="Tinjau status publikasi dan buka detail batch untuk audit.">
+          {batchMatchesLatestDataset && latestBatch ? <div className="space-y-4">
+            {latestBatch.status === "VALIDATED" && !hasValidationErrors && (latestReport?.summary.recommendationCount ?? 0) > 0 && <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-green-200 bg-green-50 p-4"><div><p className="m-0 text-sm font-bold text-green-900">{latestReport?.summary.recommendationCount} rekomendasi siap ditinjau.</p><p className="mb-0 mt-1 text-xs text-green-800">Publikasi dilakukan manual dan mengganti batch aktif.</p></div><PublishRecommendationBatch batchId={latestBatch.id} /></div>}
+            {latestBatch.status === "VALIDATED" && (latestReport?.summary.recommendationCount ?? 0) === 0 && <Alert>Batch kosong tidak dapat diterbitkan. Impor file yang berisi setidaknya satu rekomendasi valid.</Alert>}
             {latestBatch.status === "PUBLISHED" && <Alert variant="info">Batch diterbitkan {formatDate(latestBatch.publishedAt)}. Hasil aktif hanya menampilkan makanan yang masih aktif dan belum dinilai pengguna.</Alert>}
             {latestBatch.status === "SUPERSEDED" && <Alert variant="info">Batch ini sudah digantikan. Riwayat tetap tersedia; batch aktif {activeBatch ? `#${activeBatch.id}` : "belum ada"}.</Alert>}
+            {latestBatch.status === "DRAFT" && <Alert>Publikasi terkunci sampai file valid. Perbaiki CSV di tahap 4 dan periksa kembali hasil validasi.</Alert>}
             <Link href={`/admin/recommendations/${latestBatch.id}`} className="inline-flex min-h-9 items-center gap-2 text-sm font-semibold text-primary hover:underline">Buka detail dan audit batch<ArrowRight size={15} aria-hidden="true" /></Link>
-          </div> : <div className="rounded-xl border border-dashed border-border bg-gray-50 p-5"><p className="m-0 text-sm font-semibold text-gray-900">Belum ada hasil yang bisa ditinjau.</p><p className="mb-0 mt-1 text-sm leading-6 text-secondary">Selesaikan tahap 1–3 terlebih dahulu. Unggah dan validasi hasil sebelum publikasi.</p><Link href="#step-3" className="mt-4 inline-flex min-h-10 items-center gap-2 rounded-xl bg-primary px-4 text-sm font-bold text-white hover:bg-primary-hover">Ke impor dan validasi<ArrowRight size={15} aria-hidden="true" /></Link></div>}
+          </div> : <div className="rounded-xl border border-dashed border-border bg-gray-50 p-5"><p className="m-0 text-sm font-semibold text-gray-900">Belum ada batch valid untuk diterbitkan.</p><p className="mb-0 mt-1 text-sm leading-6 text-secondary">Impor dan validasi hasil dari snapshot yang dipilih terlebih dahulu.</p><Link href="#step-4" className="mt-4 inline-flex min-h-10 items-center gap-2 rounded-xl border border-border bg-white px-4 text-sm font-semibold text-gray-700 hover:bg-gray-50">Kembali ke impor</Link></div>}
         </WorkflowStep>
       </section>
     </div>

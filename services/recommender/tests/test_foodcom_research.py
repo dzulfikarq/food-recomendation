@@ -9,7 +9,14 @@ from pathlib import Path
 SCRIPT_DIR = Path(__file__).resolve().parents[1] / "scripts"
 sys.path.insert(0, str(SCRIPT_DIR))
 
-from foodcom_research import evaluate_dataset, prepare_dataset  # noqa: E402
+from foodcom_research import (
+    _graph_stats,
+    _model_predictions,
+    _neighbor_support,
+    _split_items,
+    evaluate_dataset,
+    prepare_dataset,
+)  # noqa: E402
 
 
 class FoodComResearchPipelineTests(unittest.TestCase):
@@ -84,10 +91,14 @@ class FoodComResearchPipelineTests(unittest.TestCase):
         result = evaluate_dataset(data, self.root / "evaluation", ks=(1, 3), min_common=1)
         report = json.loads((result / "evaluation.json").read_text(encoding="utf-8"))
         self.assertIn(report["validation"]["selected_k"], (1, 3))
-        self.assertEqual(report["protocol"]["final_fit"], "train plus validation; test used once after k selection")
+        self.assertEqual(
+            report["protocol"]["final_fit"],
+            "train plus validation; test scored once for every preregistered k; selected_k is primary, others descriptive only",
+        )
         self.assertEqual(report["test"]["ubcf"]["n_total"], 8)
         self.assertEqual(report["test"]["ubcf"]["n_predicted"] + report["test"]["ubcf"]["n_missing"], 8)
         self.assertIn("coverage", report["test"]["baselines"]["global_mean"]["all_test"])
+        self.assertEqual(set(report["test"]["ubcf_by_k"]), {"1", "3"})
         self.assertEqual(report["artifacts"]["test_predictions.csv"]["rows"], 8)
 
     def test_test_rating_changes_do_not_change_validation_selected_k(self):
@@ -149,6 +160,72 @@ class FoodComResearchPipelineTests(unittest.TestCase):
         self.assertNotIn(user_id, split_users["test"])
         manifest = json.loads((data / "manifest.json").read_text(encoding="utf-8"))
         self.assertEqual(manifest["audit"]["split_users"], {"train": 9, "validation": 8, "test": 8})
+
+    def test_train_history_sampler_and_connectivity_manifest_are_reproducible(self):
+        first = prepare_dataset(
+            self.interactions, self.recipes, self.root / "history-first",
+            source_version="test-release", seed=20261113, user_limit=8,
+            rights_review="test fixture only", sampling_strategy="user_history", min_user_train=4,
+        )
+        second = prepare_dataset(
+            self.interactions, self.recipes, self.root / "history-second",
+            source_version="test-release", seed=20261113, user_limit=8,
+            rights_review="test fixture only", sampling_strategy="user_history", min_user_train=4,
+        )
+        for name in ("canonical.csv", "train.csv", "validation.csv", "test.csv", "manifest.json"):
+            self.assertEqual((first / name).read_bytes(), (second / name).read_bytes())
+        manifest = json.loads((first / "manifest.json").read_text(encoding="utf-8"))
+        self.assertEqual(manifest["preprocessing"]["subset_policy"]["eligible_users_before_cap"], 8)
+        self.assertEqual(manifest["preprocessing"]["subset_policy"]["strategy"], "user_history")
+        self.assertEqual(manifest["audit"]["connectivity"]["population_full"]["edges"], 48)
+        self.assertEqual(manifest["audit"]["connectivity"]["population_full"]["components"], 1)
+
+    def test_popular_k_core_and_largest_component_sampling_execute(self):
+        configurations = (
+            ("popular_recipes", {"min_popular_user_train": 3, "min_item_train": 4}),
+            ("k_core", {"core_k": 3}),
+            ("largest_component", {}),
+        )
+        for strategy, options in configurations:
+            with self.subTest(strategy=strategy):
+                data = prepare_dataset(
+                    self.interactions, self.recipes, self.root / strategy,
+                    source_version="test-release", seed=20261113, user_limit=8,
+                    rights_review="test fixture only", sampling_strategy=strategy, **options,
+                )
+                manifest = json.loads((data / "manifest.json").read_text(encoding="utf-8"))
+                self.assertEqual(manifest["preprocessing"]["subset_policy"]["strategy"], strategy)
+                self.assertGreater(manifest["audit"]["subset"]["explicit_rating_pairs"], 0)
+                self.assertIn("population_training", manifest["audit"]["connectivity"])
+
+    def test_graph_components_and_largest_component_members(self):
+        stats, users, items = _graph_stats(
+            [(1, 1, 5), (1, 2, 4), (2, 2, 5), (2, 3, 3), (3, 4, 5)],
+            3, 4, include_largest_members=True,
+        )
+        self.assertEqual(stats["components"], 2)
+        self.assertEqual(stats["largest_component"], {"nodes": 5, "users": 2, "items": 3})
+        self.assertEqual(set(users), {1, 2})
+        self.assertEqual(set(items), {1, 2, 3})
+
+    def test_neighbor_and_candidate_support_are_reported_separately(self):
+        training = {1: {1: 5, 2: 4}, 2: {1: 4}, 3: {3: 5}}
+        evaluation = [(1, 3, 5)]
+        neighbors, stats = _neighbor_support(training, evaluation, min_common=1)
+        predictions, reasons = _model_predictions(training, evaluation, 1, 1, neighbors)
+        self.assertEqual(stats["valid_neighbors_per_user"]["histogram"], {"1": 1})
+        self.assertEqual(stats["common_ratings_per_valid_user_pair"]["histogram"], {"1": 1})
+        self.assertEqual(stats["zero_overlap_pairs"], 1)
+        self.assertEqual(stats["common_ratings_per_candidate_user_pair"]["histogram"], {"0": 1, "1": 1})
+        self.assertEqual(predictions, [None])
+        self.assertEqual(reasons, ["neighbors_not_rated_item"])
+
+    def test_split_assignment_is_deterministic_and_preserves_minimum_partitions(self):
+        items = [str(item) for item in range(101, 111)]
+        first = _split_items(20261113, "user-1", items)
+        self.assertEqual(first, _split_items(20261113, "user-1", items))
+        self.assertEqual({"train", "validation", "test"}, set(first.values()))
+        self.assertEqual({"train"}, set(_split_items(20261113, "user-2", items[:2]).values()))
 
     def test_modified_split_fails_checksum_before_evaluation(self):
         data = self._prepare("dataset")

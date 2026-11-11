@@ -34,6 +34,36 @@ enum RecommendationJobStatus {
   CANCELLED
 }
 
+enum ResearchStudyStatus {
+  DRAFT
+  OPEN
+  CLOSED
+  ARCHIVED
+}
+
+enum ResearchParticipantStatus {
+  ACTIVE
+  COMPLETED
+  WITHDRAWAL_REQUESTED
+  WITHDRAWN
+}
+
+enum ResearchWithdrawalStatus {
+  PENDING
+  PROCESSED
+}
+
+enum ResearchExportStatus {
+  READY
+  REVOCATION_REQUIRED
+  REVOKED
+}
+
+enum ResearchRatingChangeType {
+  CREATED
+  UPDATED
+}
+
 /// Better Auth stores credential hashes in Account.password, not as plaintext on User.
 model User {
   id               Int       @id @default(autoincrement())
@@ -53,6 +83,10 @@ model User {
   publishedBatches RecommendationBatch[] @relation("RecommendationBatchPublisher")
   recommendations Recommendation[] @relation("RecommendationUser")
   recommendationJobs RecommendationJob[] @relation("RecommendationJobCreator")
+  researchStudies ResearchStudy[] @relation("ResearchStudyAdmin")
+  researchParticipations ResearchParticipant[] @relation("ResearchParticipantUser")
+  researchExports ResearchExport[] @relation("ResearchExportAdmin")
+  processedResearchWithdrawals ResearchWithdrawal[] @relation("ResearchWithdrawalAdmin")
 }
 
 model Session {
@@ -122,6 +156,8 @@ model Food {
   updatedAt    DateTime @updatedAt
   ratings      Rating[]
   recommendations Recommendation[]
+  researchRatings ResearchRating[]
+  researchRatingChanges ResearchRatingChange[]
 
   @@index([isActive, category])
 }
@@ -292,4 +328,150 @@ model Recommendation {
   @@unique([batchId, userId, rank])
   @@index([userId, batchId])
   @@index([foodId])
+}
+
+model ResearchStudy {
+  id                     Int                 @id @default(autoincrement())
+  title                  String              @db.VarChar(180)
+  description            String              @db.Text
+  purpose                String              @db.Text
+  dataCollected          String              @db.Text
+  dataUse                String              @db.Text
+  withdrawalInstructions String              @db.Text
+  consentVersion         String              @db.VarChar(40)
+  consentDocument        String              @db.Text
+  contactName            String              @db.VarChar(120)
+  contactEmail           String              @db.VarChar(254)
+  startsAt               DateTime
+  closesAt               DateTime
+  status                 ResearchStudyStatus @default(DRAFT)
+  createdByAdminId       Int
+  createdAt              DateTime            @default(now())
+  updatedAt              DateTime            @updatedAt
+  createdByAdmin         User                @relation("ResearchStudyAdmin", fields: [createdByAdminId], references: [id], onDelete: Restrict)
+  participants           ResearchParticipant[]
+  exports                ResearchExport[]
+
+  @@index([status, startsAt, closesAt])
+  @@index([createdByAdminId, createdAt])
+}
+
+/// Numeric ID is a study-scoped pseudonym in exports; userId is kept separately for account ownership.
+model ResearchParticipant {
+  id                    Int                       @id @default(autoincrement())
+  studyId               Int
+  userId                Int
+  status                ResearchParticipantStatus @default(ACTIVE)
+  completedAt           DateTime?
+  withdrawalRequestedAt DateTime?
+  withdrawnAt           DateTime?
+  createdAt             DateTime                  @default(now())
+  updatedAt             DateTime                  @updatedAt
+  study                 ResearchStudy             @relation(fields: [studyId], references: [id], onDelete: Restrict)
+  user                  User                      @relation("ResearchParticipantUser", fields: [userId], references: [id], onDelete: Restrict)
+  consents              ResearchConsent[]
+  ratings               ResearchRating[]
+  ratingChanges         ResearchRatingChange[]
+  withdrawal            ResearchWithdrawal?
+  exportMemberships     ResearchExportParticipant[]
+
+  @@unique([studyId, userId])
+  @@index([studyId, status])
+  @@index([userId, createdAt])
+}
+
+model ResearchConsent {
+  id            Int                 @id @default(autoincrement())
+  participantId Int
+  version       String              @db.VarChar(40)
+  documentText  String              @db.Text
+  acceptedAt    DateTime            @default(now())
+  revokedAt     DateTime?
+  participant   ResearchParticipant @relation(fields: [participantId], references: [id], onDelete: Restrict)
+
+  @@unique([participantId, version])
+  @@index([participantId, version, revokedAt])
+}
+
+model ResearchRating {
+  id            Int                 @id @default(autoincrement())
+  participantId Int
+  foodId        Int
+  rating        Int
+  triedAt       DateTime            @default(now())
+  createdAt     DateTime            @default(now())
+  updatedAt     DateTime            @updatedAt
+  participant   ResearchParticipant @relation(fields: [participantId], references: [id], onDelete: Restrict)
+  food          Food                @relation(fields: [foodId], references: [id], onDelete: Restrict)
+
+  @@unique([participantId, foodId])
+  @@index([foodId, rating])
+  @@index([participantId, updatedAt])
+}
+
+model ResearchRatingChange {
+  id             Int                       @id @default(autoincrement())
+  participantId  Int
+  foodId         Int
+  changeType     ResearchRatingChangeType
+  oldRating      Int?
+  newRating      Int
+  idempotencyKey String                    @db.VarChar(36)
+  createdAt      DateTime                  @default(now())
+  participant    ResearchParticipant       @relation(fields: [participantId], references: [id], onDelete: Restrict)
+  food           Food                      @relation(fields: [foodId], references: [id], onDelete: Restrict)
+
+  @@unique([participantId, idempotencyKey])
+  @@index([participantId, createdAt])
+  @@index([foodId, createdAt])
+}
+
+model ResearchWithdrawal {
+  id                 Int                     @id @default(autoincrement())
+  participantId      Int                     @unique
+  status             ResearchWithdrawalStatus @default(PENDING)
+  requestedAt        DateTime                @default(now())
+  processedAt        DateTime?
+  processedByAdminId Int?
+  participant        ResearchParticipant     @relation(fields: [participantId], references: [id], onDelete: Restrict)
+  processedByAdmin   User?                   @relation("ResearchWithdrawalAdmin", fields: [processedByAdminId], references: [id], onDelete: Restrict)
+
+  @@index([status, requestedAt])
+}
+
+model ResearchExport {
+  id                   Int                 @id @default(autoincrement())
+  studyId              Int
+  version              Int
+  createdByAdminId     Int
+  filename             String              @db.VarChar(255)
+  filePath             String              @db.VarChar(64)
+  fileChecksum         String              @db.VarChar(64)
+  participantCount     Int
+  ratingCount          Int
+  foodCount            Int
+  consentVersion       String              @db.VarChar(40)
+  manifest             Json                @db.JsonB
+  status               ResearchExportStatus @default(READY)
+  withdrawalAffectedAt DateTime?
+  revokedAt            DateTime?
+  createdAt            DateTime            @default(now())
+  study                ResearchStudy       @relation(fields: [studyId], references: [id], onDelete: Restrict)
+  createdByAdmin       User                @relation("ResearchExportAdmin", fields: [createdByAdminId], references: [id], onDelete: Restrict)
+  participantMemberships ResearchExportParticipant[]
+
+  @@unique([studyId, version])
+  @@index([createdByAdminId, createdAt])
+  @@index([studyId, createdAt])
+  @@index([status, withdrawalAffectedAt])
+}
+
+model ResearchExportParticipant {
+  exportId      Int
+  participantId Int
+  export        ResearchExport      @relation(fields: [exportId], references: [id], onDelete: Restrict)
+  participant   ResearchParticipant @relation(fields: [participantId], references: [id], onDelete: Restrict)
+
+  @@id([exportId, participantId])
+  @@index([participantId, exportId])
 }

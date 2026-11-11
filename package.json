@@ -6,8 +6,9 @@
     "dev": "next dev",
     "build": "prisma generate && next build",
     "start": "next start",
-    "lint": "eslint app components lib prisma tests scripts next.config.ts prisma.config.ts eslint.config.mjs postcss.config.mjs",
-    "test": "tsx --test tests/auth.test.ts tests/food-csv.test.ts tests/recommendation-csv.test.ts",
+    "lint": "eslint app components lib prisma tests scripts next.config.ts prisma.config.ts playwright.config.ts eslint.config.mjs postcss.config.mjs",
+    "test": "tsx --test tests/auth.test.ts tests/food-csv.test.ts tests/public-food-query.test.ts tests/recommendation-csv.test.ts",
+    "test:e2e": "node scripts/test-e2e.mjs",
     "test:integration": "node scripts/test-integration.mjs",
     "typecheck": "tsc --noEmit",
     "db:generate": "prisma generate",
@@ -33,18 +34,19 @@
     "zod": "^4.6.7"
   },
   "devDependencies": {
+    "@playwright/test": "^1.65.0",
     "@tailwindcss/postcss": "^4.1.13",
-    "@types/pg": "^8.15.5",
     "@types/node": "^22.18.6",
+    "@types/pg": "^8.15.5",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
-    "@eslint/js": "^9.39.5",
     "eslint": "^9.39.5",
     "globals": "^17.13.0",
     "prisma": "^7.10.1",
     "tailwindcss": "^4.1.13",
     "tsx": "^4.20.5",
     "typescript": "^5.9.2",
-    "typescript-eslint": "^8.71.2"
+    "typescript-eslint": "^8.71.2",
+    "@eslint/js": "^9.39.5"
   }
 }

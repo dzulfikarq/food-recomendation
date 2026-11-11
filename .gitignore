@@ -1,6 +1,7 @@
 node_modules/
 .next/
 .next-foodrec-validation/
+.next-foodrec-phase-f/
 generated/prisma/
 *.tsbuildinfo
 out/
@@ -12,6 +13,8 @@ prisma/*.db
 prisma/*.db-journal
 storage/
 storage-test/
+test-results/
+playwright-report/
 .venv/
 __pycache__/
 *.py[cod]

@@ -202,6 +202,18 @@ class ApiClient:
         except (KeyError, TypeError, ValueError):
             raise WorkerError("INVALID_CLAIM_RESPONSE", retryable=False) from None
 
+    def schedule(self, worker_id: str):
+        status, _, body = self.request(
+            "POST", "/api/internal/recommendation-jobs/schedule",
+            payload={"workerId": worker_id, "engineVersion": ENGINE_VERSION},
+        )
+        if status != 200:
+            raise WorkerError("SCHEDULER_REQUEST_FAILED")
+        try:
+            return json.loads(body)["data"]
+        except (KeyError, TypeError, ValueError):
+            raise WorkerError("INVALID_SCHEDULER_RESPONSE", retryable=False) from None
+
     def snapshot(self, job: dict[str, object], identity: Mapping[str, str]) -> bytes:
         status, headers, body = self.request(
             "GET", f"/api/internal/recommendation-jobs/{job['id']}/snapshot", identity=identity,
@@ -368,8 +380,20 @@ def main() -> int:
     if hasattr(signal, "SIGTERM"):
         signal.signal(signal.SIGTERM, request_shutdown)
     LOG.info("worker started id=%s api=%s engine=%s", worker_id, base_url, ENGINE_VERSION)
+    next_schedule_check = 0.0
     while not stop_requested.is_set():
         try:
+            now = time.monotonic()
+            if now >= next_schedule_check:
+                outcome = client.schedule(worker_id)
+                retry_after = outcome.get("retryAfterSeconds", 60)
+                if type(retry_after) not in {int, float} or retry_after < 1:
+                    retry_after = 60
+                next_schedule_check = time.monotonic() + min(float(retry_after), 60)
+                if outcome.get("checked"):
+                    LOG.info("scheduler checked reason=%s scheduled=%s", outcome.get("reason"), outcome.get("scheduled"))
+            if stop_requested.is_set():
+                break
             job = client.claim(worker_id)
             if job is None:
                 stop_requested.wait(poll_seconds)
@@ -378,6 +402,7 @@ def main() -> int:
             process_job(client, job, worker_id, stop_requested)
         except WorkerError as error:
             LOG.warning("worker request=%s", error.code)
+            next_schedule_check = time.monotonic() + poll_seconds
             stop_requested.wait(min(poll_seconds, 5))
     LOG.info("worker stopped id=%s", worker_id)
     return 0

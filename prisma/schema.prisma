@@ -141,6 +141,7 @@ model Rating {
   @@index([foodId])
 }
 
+/// ponytail: singleton revision row serializes rating writes; shard by dataset if throughput requires it.
 model RatingDatasetState {
   id                       Int       @id @default(1)
   currentRevision          BigInt    @default(0)
@@ -158,6 +159,17 @@ model RecommendationEngineConfig {
   engineVersion                  String    @default("python-ubcf-v1") @db.VarChar(40)
   lastSuccessfulProcessingAt     DateTime?
   validationStatus               String    @default("PENDING_VALIDATION") @db.VarChar(40)
+  schedulerLastCheckedAt         DateTime?
+  nextScheduleAt                 DateTime  @default(now())
+  lastSchedulerReason            String?   @db.VarChar(60)
+}
+
+model RecommendationWorker {
+  workerId      String   @id @db.VarChar(120)
+  engineVersion String   @db.VarChar(40)
+  lastSeenAt    DateTime @default(now())
+
+  @@index([lastSeenAt])
 }
 
 model FoodImport {
@@ -225,6 +237,7 @@ model RecommendationJob {
   createdByAdminId  Int
   trigger           String                   @default("MANUAL_ADMIN") @db.VarChar(40)
   idempotencyKey    String                   @unique @db.VarChar(100)
+  automaticDedupeKey String?                 @unique @db.VarChar(64)
   engineVersion     String                   @db.VarChar(40)
   parameters        Json                     @db.JsonB
   status            RecommendationJobStatus  @default(PENDING)
@@ -256,6 +269,9 @@ model RecommendationJobArtifact {
   verificationStatus String             @default("UNVERIFIED") @db.VarChar(20)
   checksum           String             @db.VarChar(64)
   rowCount           Int
+  sourceRatingRevision BigInt           @default(0)
+  currentRatingRevision BigInt          @default(0)
+  isStale             Boolean           @default(false)
   payload            Json               @db.JsonB
   createdAt          DateTime           @default(now())
   job                RecommendationJob @relation(fields: [jobId], references: [id], onDelete: Restrict)

@@ -190,6 +190,12 @@ type ClaimedJobRow = {
 export async function claimRecommendationJob(workerId: string, engineVersion = RECOMMENDATION_ENGINE_VERSION) {
   return prisma.$transaction(async (tx) => {
     const now = new Date();
+    await tx.recommendationWorker.upsert({
+      where: { workerId },
+      create: { workerId, engineVersion, lastSeenAt: now },
+      update: { engineVersion, lastSeenAt: now }
+    });
+    await tx.recommendationWorker.deleteMany({ where: { lastSeenAt: { lt: new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000) } } });
     await tx.$executeRaw(Prisma.sql`
       UPDATE "RecommendationJob"
       SET "status" = 'FAILED', "finishedAt" = ${now}, "leaseExpiresAt" = NULL, "timeoutAt" = NULL,
@@ -274,16 +280,26 @@ export async function heartbeatRecommendationJob(jobId: string, workerId: string
   const now = new Date();
   requireActiveLease(job, now);
   const leaseExpiresAt = new Date(Math.min(now.getTime() + JOB_LEASE_SECONDS * 1000, job.timeoutAt!.getTime()));
-  const updated = await prisma.recommendationJob.updateMany({
-    where: {
-      id: jobId,
-      status: "RUNNING",
-      workerId,
-      leaseToken,
-      leaseExpiresAt: { gt: now },
-      timeoutAt: { gt: now }
-    },
-    data: { heartbeatAt: now, leaseExpiresAt }
+  const updated = await prisma.$transaction(async (tx) => {
+    const result = await tx.recommendationJob.updateMany({
+      where: {
+        id: jobId,
+        status: "RUNNING",
+        workerId,
+        leaseToken,
+        leaseExpiresAt: { gt: now },
+        timeoutAt: { gt: now }
+      },
+      data: { heartbeatAt: now, leaseExpiresAt }
+    });
+    if (result.count === 1) {
+      await tx.recommendationWorker.upsert({
+        where: { workerId },
+        create: { workerId, engineVersion: job.engineVersion, lastSeenAt: now },
+        update: { engineVersion: job.engineVersion, lastSeenAt: now }
+      });
+    }
+    return result;
   });
   if (updated.count !== 1) throw new RecommendationJobError("LEASE_LOST", 409, "Job lease is no longer active.");
   return { heartbeatAt: now, leaseExpiresAt };
@@ -363,7 +379,7 @@ export async function submitRecommendationJobResult(
 
   return prisma.$transaction(async (tx) => {
     await tx.$queryRaw(Prisma.sql`SELECT "id" FROM "RecommendationJob" WHERE "id" = ${jobId}::uuid FOR UPDATE`);
-    const job = await tx.recommendationJob.findUnique({ where: { id: jobId }, include: { artifact: true } });
+    const job = await tx.recommendationJob.findUnique({ where: { id: jobId }, include: { artifact: true, datasetExport: true } });
     if (!job) throw new RecommendationJobError("JOB_NOT_FOUND", 404, "Recommendation job not found.");
     if (job.workerId !== workerId || job.leaseToken !== leaseToken) {
       throw new RecommendationJobError("LEASE_NOT_OWNED", 409, "Worker does not own this job lease.");
@@ -377,12 +393,22 @@ export async function submitRecommendationJobResult(
     const now = new Date();
     requireActiveLease(job, now);
     if (job.artifact) throw new RecommendationJobError("RESULT_ALREADY_EXISTS", 409, "Job already has a result artifact.");
+    const ratingStates = await tx.$queryRaw<Array<{ currentRevision: bigint; processedRevision: bigint }>>`
+      SELECT "currentRevision", "processedRevision" FROM "RatingDatasetState" WHERE "id" = 1 FOR UPDATE
+    `;
+    const ratingState = ratingStates[0];
+    if (!ratingState) throw new RecommendationJobError("RATING_DATASET_STATE_MISSING", 500, "Rating dataset state is unavailable.");
+    const sourceRevision = job.datasetExport.ratingRevision;
+    const isStale = sourceRevision < ratingState.currentRevision;
     const artifact = await tx.recommendationJobArtifact.create({
       data: {
         jobId,
         verificationStatus: "UNVERIFIED",
         checksum,
         rowCount: normalized.length,
+        sourceRatingRevision: sourceRevision,
+        currentRatingRevision: ratingState.currentRevision,
+        isStale,
         payload: { recommendations: normalized } as unknown as Prisma.InputJsonValue
       }
     });
@@ -390,7 +416,23 @@ export async function submitRecommendationJobResult(
       where: { id: jobId },
       data: { status: "SUCCEEDED", finishedAt: now, leaseExpiresAt: null, timeoutAt: null, errorSummary: null }
     });
-    return { status: "SUCCEEDED" as const, artifactId: artifact.id, checksum, rowCount: artifact.rowCount, verificationStatus: "UNVERIFIED", idempotent: false };
+    const completedRevision = sourceRevision > ratingState.currentRevision ? ratingState.currentRevision : sourceRevision;
+    const processedRevision = completedRevision > ratingState.processedRevision ? completedRevision : ratingState.processedRevision;
+    await tx.ratingDatasetState.update({ where: { id: 1 }, data: { processedRevision } });
+    if (completedRevision >= ratingState.processedRevision) {
+      await tx.recommendationEngineConfig.update({ where: { id: 1 }, data: { lastSuccessfulProcessingAt: now } });
+    }
+    return {
+      status: "SUCCEEDED" as const,
+      artifactId: artifact.id,
+      checksum,
+      rowCount: artifact.rowCount,
+      verificationStatus: "UNVERIFIED",
+      sourceRatingRevision: sourceRevision.toString(),
+      currentRatingRevision: ratingState.currentRevision.toString(),
+      isStale,
+      idempotent: false
+    };
   });
 }
 
@@ -447,6 +489,9 @@ export async function getRecommendationJobStatus(jobId: string, workerId: string
       checksum: job.artifact.checksum,
       rowCount: job.artifact.rowCount,
       verificationStatus: job.artifact.verificationStatus,
+      sourceRatingRevision: job.artifact.sourceRatingRevision.toString(),
+      currentRatingRevision: job.artifact.currentRatingRevision.toString(),
+      isStale: job.artifact.isStale,
       createdAt: job.artifact.createdAt
     } : null
   };

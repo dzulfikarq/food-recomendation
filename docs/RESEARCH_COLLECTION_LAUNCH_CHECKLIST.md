@@ -2,7 +2,7 @@
 
 ## Keputusan saat ini
 
-**NO-GO untuk responden sungguhan dan deployment.** Implementasi teknis sudah diuji pada PostgreSQL `_test` dan Chrome desktop/mobile viewport. Checklist operasional di bawah belum disetujui atau diverifikasi. Jangan ubah studi menjadi `OPEN` untuk penelitian nyata sampai semua gate metodologi, consent, kontak, screening, retensi, backup, dan monitoring selesai.
+**NO-GO untuk responden sungguhan dan deployment.** Implementasi teknis lulus PostgreSQL `_test`, Chromium desktop/mobile viewport, dan axe scan pada alur terpilih. Checklist operasional di bawah belum disetujui atau diverifikasi pada production. Jangan ubah studi menjadi `OPEN` untuk penelitian nyata sampai semua gate metodologi, consent, kontak, screening, retensi, backup, dan monitoring selesai.
 
 Penelitian memakai ID participant pseudonim, bukan anonim. Relasi akun tetap tersimpan untuk consent dan withdrawal. Aplikasi tidak memverifikasi identitas, usia, kelayakan, atau kebenaran pernyataan “pernah mencoba”. Persetujuan akun bukan persetujuan etik. Minta keputusan pembimbing/otoritas yang relevan; dokumen ini bukan nasihat hukum atau etik.
 
@@ -20,8 +20,8 @@ Catat pemilik, tanggal, dan tautan bukti untuk setiap item. Kotak yang belum dic
 | [ ] | Tanggal dan zona waktu mulai/tutup sesuai protokol. Minta Admin kedua memeriksa konfigurasi dan consent sebelum membuka studi. | |
 | [ ] | Prosedur withdrawal menentukan kanal permintaan, SLA pemrosesan Admin, penghapusan rating/history, pencatatan export terdampak, pemberitahuan penerima, dan batas kemampuan menarik salinan eksternal. Uji prosedur di staging. | |
 | [ ] | `retentionUntil` dan `retentionPolicy` disetujui, termasuk penanggung jawab dan disposal manual atas database, file export, backup, dan salinan penerima. Aplikasi **tidak** menghapus data otomatis saat tanggal retensi. | |
-| [ ] | Backup database **dan** `FOODREC_STORAGE_DIR/research-exports` dienkripsi, akses dibatasi, jadwal/retensi backup ditetapkan, dan restore test berhasil. Tetapkan cara merekonsiliasi withdrawal yang terjadi setelah backup dipulihkan. | |
-| [ ] | Monitoring/alert untuk error API, database, checksum, file storage, backup, serta withdrawal tertunda aktif dan diuji. Tetapkan pemilik on-call. Aplikasi tidak menyediakan alerting operasional sendiri. | |
+| [ ] | Backup production database **dan** `FOODREC_STORAGE_DIR/research-exports` dienkripsi, akses dibatasi, jadwal/retensi ditetapkan, dan restore production-artifact diuji pada recovery environment terisolasi. Tetapkan rekonsiliasi withdrawal pasca-checkpoint. Prosedur ada di [`RESEARCH_DEPLOYMENT_RUNBOOK.md`](./RESEARCH_DEPLOYMENT_RUNBOOK.md); backup/restore production belum dilakukan. | Operator infra |
+| [ ] | Monitoring/alert production untuk error API, kesehatan database, checksum/storage, backup age/restore, serta withdrawal tertunda aktif dan diuji. Tetapkan pemilik on-call. Aplikasi menghasilkan log terstruktur aman; tidak mengirim alert eksternal. | Operator infra |
 | [ ] | Admin dan operator memahami bahwa dataset pseudonim, bukan anonim; CSV/manifest dan log tidak boleh dipublikasikan tanpa review disclosure. | |
 
 **Launch gate:** hanya setelah semua kotak lengkap, bukti ditinjau, dan penanggung jawab memberi persetujuan tertulis, Admin boleh membuat studi final lalu membukanya. Studi uji harus tetap `CLOSED`/`ARCHIVED`; gunakan staging untuk simulasi.
@@ -49,7 +49,7 @@ Keempat migration diterapkan pada `foodrec_test` dan `foodrec_e2e_test` oleh int
 
 ## Environment audit
 
-Jangan menaruh secret dalam repository, tiket, screenshot, manifest, atau log. `.env` production tidak diperiksa oleh review ini; nama dan bentuk variabel diverifikasi dari `lib/env.ts`, `.env.example`, dan runner test.
+Jangan menaruh secret dalam repository, tiket, screenshot, manifest, atau log. Local `.env` diabaikan Git dan nama/bentuk variabel lolos pemeriksaan dasar tanpa membaca/mencatat nilainya. `.env` production tidak diperiksa; production secret, storage ACL, DB grants/network/TLS tetap **unknown** dan belum lulus audit.
 
 | Variable | Production requirement |
 | --- | --- |
@@ -62,11 +62,11 @@ Jangan menaruh secret dalam repository, tiket, screenshot, manifest, atau log. `
 | `FOODREC_TEST_DATABASE_URL`, `FOODREC_E2E_DATABASE_URL`, `FOODREC_ORIGINAL_DATABASE_URL`, `FOODREC_TEST_RUN`, `FOODREC_TEST_STORAGE_DIR`, `FOODREC_NEXT_DIST_DIR` | Test/runner only. Jangan set atau gunakan sebagai target production. Runner memerlukan database lokal terpisah bernama `_test`. |
 | `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB` | Konfigurasi Docker/local pada `.env.example`; bukan pengganti secrets deployment terkelola. |
 
-Deployment serverless/local ephemeral belum siap untuk export penelitian tanpa persistent shared storage/object storage yang private dan restore-tested. Jangan menganggap direktori lokal cukup untuk multi-instance deployment.
+Export research menolak path di bawah `public`, memeriksa real path/symlink, dan mewajibkan absolute `FOODREC_STORAGE_DIR` saat runtime production. POSIX export directory/file dibuat mode `0700`/`0600`; kode tidak mengatur NTFS ACL. Audit lokal menemukan ACL inherited broad pada direktori export E2E Windows (data sintetis saja); jangan gunakan direktori tersebut untuk data responden. Production path, ACL, encryption-at-rest, persistence, dan multi-instance behavior belum diverifikasi. Deployment serverless/local ephemeral tetap **NO-GO** tanpa private persistent/shared storage yang restore-tested.
 
 ## Migration, backup, rollback, dan deploy plan
 
-Belum ada production migration atau deployment yang dijalankan. Lakukan hanya setelah instruksi dan otorisasi deployment terpisah.
+Belum ada production migration atau deployment yang dijalankan. Prosedur siap di [`RESEARCH_DEPLOYMENT_RUNBOOK.md`](./RESEARCH_DEPLOYMENT_RUNBOOK.md); jalankan hanya setelah instruksi dan otorisasi deployment terpisah.
 
 ### Sebelum migration
 
@@ -105,8 +105,10 @@ Belum ada production migration atau deployment yang dijalankan. Lakukan hanya se
 
 ## Monitoring dan security checks
 
-- Konfigurasikan monitoring platform untuk 5xx/latency endpoint `/api/research/*` dan `/api/admin/research/*`, koneksi/migration DB, error read/write/permission/checksum storage, kapasitas disk, backup age, restore status, withdrawal tertunda, dan revocation-required export. Aplikasi belum mengirim alert khusus; jangan klaim monitoring aktif sebelum external alert diuji.
-- Jangan log request body, consent text, email/nama responden, rating, session cookie, URL kredensial, atau CSV. Log hanya kode error, route, status, correlation ID non-PII, dan durasi.
+- Next.js request-error hook dan route export mencatat route template/jenis error atau kode aman; tidak mencatat request URL, headers, error message, consent, rating, identitas, atau CSV. Ini hanya application logs, bukan dashboard/alert.
+- `docker-compose.yml` punya PostgreSQL `pg_isready` healthcheck untuk local Compose saja. Konfigurasikan monitoring platform untuk 5xx/latency endpoint `/api/research/*` dan `/api/admin/research/*`, koneksi/migration DB, error read/write/permission/checksum storage, kapasitas disk, backup age/restore status, withdrawal tertunda, dan revocation-required export. Production monitoring belum diuji/aktif.
+- `npm audit --omit=dev` bersih. Full `npm audit` melaporkan 7 moderate advisories di dev dependency tree `typescript-eslint`/`minimatch`; perbaikan otomatis yang disarankan memerlukan perubahan major. Tinjau/upgrade terpisah; jangan jalankan `npm audit fix --force` sebagai bagian readiness tanpa review.
+- Jangan log request body, consent text, email/nama responden, rating, session cookie, URL kredensial, atau CSV.
 - Uji HTTPS, secret rotation/storage, DB least privilege/private network, Admin-only API/download, CSRF/origin, no-store responses, rate limits, storage path/ACL, file checksum, backup encryption, dan akses audit.
 - Pastikan private export directory tidak dapat disajikan sebagai static file. Jika platform tidak menyediakan persistent private storage bersama, deployment **NO-GO**.
 - Scan dependencies/security policy sesuai proses organisasi. Review manual authorization dan audit event; technical E2E bukan penetration test.
@@ -114,4 +116,4 @@ Belum ada production migration atau deployment yang dijalankan. Lakukan hanya se
 
 ## Bukti pemeriksaan terakhir
 
-Review ini menjalankan `npm test` (22), `npm run lint`, `npx tsc --noEmit`, `npm run test:integration` (7/7 pada `foodrec_test`), `npm run test:e2e` (5/5 Chromium pada `foodrec_e2e_test`, desktop dan 390px mobile viewport), dan `git diff --check`. Build production untuk E2E dibuat terhadap `_test`; database E2E dipakai tanpa reset. Pemeriksaan fisik perangkat, screen reader/contrast manual, production backup/restore, production secrets/security, ethics/methodology approval, serta live monitoring **belum dilakukan**.
+Review lokal: `npm test` 24/24, `npm run lint`, `npm run typecheck`, `npm run test:integration` 7/7 pada `foodrec_test`, `npm run test:db-restore` membandingkan 25 public tables dan membersihkan dump/scratch DB, `npm run test:e2e` 5/5 Chromium, `npm audit --omit=dev` 0 temuan, dan `git diff --check`. Full `npm audit` masih menemukan 7 moderate pada dev dependency tree (`typescript-eslint`/`minimatch`); remediation major-version belum diterapkan. E2E mencakup axe scan WCAG otomatis pada halaman riset/Admin terpilih, 1440px/390px viewport, dan alur consent/withdrawal/export; bukan audit WCAG penuh. Build E2E dan restore memakai database `_test`; database E2E dipakai tanpa reset dan studi uji ditutup/arsipkan oleh test. Pemeriksaan fisik perangkat dan screen reader/contrast manual, production backup/restore, production secrets/ACL/security, ethics/methodology approval, serta production monitoring/alert **belum dilakukan**. Jangan simpulkan production siap dari bukti lokal.

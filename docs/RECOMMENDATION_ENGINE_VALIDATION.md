@@ -68,9 +68,56 @@ user: Altair→Python
 | Neighbors | Positive similarity, minimum common ratings 1, similarity descending, user ID ascending for ties; k=3. | 43 XML sets `k=3`; no neighbor list/scores or tie policy. 264 workflow XML is absent. | k agrees where declared; neighbor set/order **unverified**. |
 | Weighting/prediction | Similarity-weighted raw neighbor rating average; no user-mean centering. Only selected neighbors who rated candidate contribute. No valid weight means no score. | 43 XML sets `Weighted Knn=false`; package does not define whether this disables neighbor weighting or another weighting stage. 264 screenshot has no scores/configuration. | Plausible source of 264 mismatch, not proven cause. |
 | Candidate filtering | Active IDs supplied by caller minus target user's ratings in training snapshot. | 43 XML explicitly branches on remaining candidate count. All 43/264 transcribed items are unrated in the corresponding input. | Candidate exclusion agrees for available rows. |
-| Ranking/ties | Predicted rating descending, then food ID ascending. Weighted averages are clamped to observed neighbor rating bounds solely to remove floating-point drift. | Screenshot references expose rank only; no score/tie details. | Tie behavior **unverified**; cannot explain all 264 differences. |
+| Ranking/ties | Predicted rating descending, then food ID ascending. Weighted averages are clamped to observed neighbor rating bounds solely to remove floating-point drift. | Screenshot references expose rank only; no score/tie details. | Tie behavior **unverified**. Per-user diagnostic finds 4/19 scored screenshot items tied with Python's top score, 15 scored below Python Top-1, and 3 unscored; tie policy cannot explain full mismatch if transcription is accurate. |
 
 The 43 workflow XML uses operator compatibility `irbrecommender:user_k-NN` 5.1.002 with `Weighted Knn=false`, `k=3`, and `Apply Model IR` `n=1/2`, `Online updates=false`. Its source is a local repository entry, so XML is not a self-contained rerun. Package includes no verified 264 workflow. `Weighted Knn=false` alone does not establish cosine formula, normalization, score aggregation, or tie-breaking. The 264 screenshot/reference association is explicitly an assumption in package README. Since many Python-scored screenshot items are below Top-1 and three are unscored, item mismatch is not attributable to tie-breaking alone; exact cause remains unresolved without actual process settings and score output.
+
+## Phase G diagnostic comparison — 2026-11-11
+
+No Python formula or production engine behavior was changed. Diagnostic runs exercised alternatives only; they do not identify Altair semantics.
+
+### Dataset integrity and sensitivity probes
+
+- Training fixture: 264 rows, 22 users (IDs 2–23, exactly 12 rows/user), 40 foods (IDs 1–40), integer ratings 1–5, no duplicate user-food pairs; SHA-256 `19e34a779d3637b12667f4a7c3f4f369c8c901c45513b25f2965811ffa6fa349`.
+- Holdout: 66 rows, 22 users (3 rows/user), IDs and ratings are integers, no duplicate pairs, and all 66 user-food pairs are disjoint from training; SHA-256 `a5bf580b2d951864937f7f3803de9df50f7280556f02e5d0d32c38a6945dfaea`.
+- Toy fixture: 43 rows, 8 users, 6 foods, integer IDs/ratings, no duplicate pairs; SHA-256 `8425899720fd43edb06822fb7f9efb80c47b563490a042bbc2b05ca865f31a53`.
+- ID mapping is structurally consistent in supplied CSVs: Python parses numeric `user_id`/`food_id` as integers; the toy XML assigns `user_id` and `food_id` to user/item identification roles; recommendation references use numeric `item_id`. No ID/type cause was found in these artifacts.
+- Python parameter sweep compared overlap vs zero-filled cosine, minimum overlap 1 vs 2, k ∈ {1,2,3,5,10}, and similarity-weighted vs unweighted neighbor rating averages. No tested configuration matched more than 1/22 screenshot Top-1 items. This is sensitivity evidence, not a parameter search target; no setting was selected to fit the screenshot.
+- At baseline overlap/minimum-overlap-1/k=3, 62/66 selected neighbors have cosine exactly 1.0; 16/66 selected neighbor pairs share only one rated food. 15/22 users have a tie at the k=3 neighbor cutoff. Thus low-overlap cosine and neighbor tie ordering are plausible contributors, but actual Altair neighbor identities/order are unavailable, so this is **not proven root cause**.
+- For the 66-row rating-prediction holdout, the separate Python-only test still yields 42 predictions and 24 missing; MAE/RMSE apply only to those 42. No Altair holdout predictions were provided.
+
+### Per-user comparison: train-264 Top-1
+
+Reference column means screenshot transcription, not an original exported Altair CSV. Python rank/score is the rank/score of that transcribed item under the unchanged baseline (`overlap`, k=3, minimum overlap 1, similarity-weighted ratings). Neighbor column shows selected Python neighbor ID / common training ratings.
+
+| User | Screenshot item | Python Top-1 | Screenshot item Python rank / score | Selected Python neighbors (`id` / overlap) |
+|---:|---:|---:|---:|---|
+| 2 | 28 | 13 | 6 / 4.0091 | 12 / 1, 11 / 3, 3 / 2 |
+| 3 | 28 | 10 | 2 / 5.0000 (top-score tie) | 17 / 2, 19 / 3, 7 / 3 |
+| 4 | 33 | 6 | 11 / 3.0000 | 9 / 3, 14 / 4, 16 / 1 |
+| 5 | 13 | 2 | 2 / 5.0000 (top-score tie) | 6 / 3, 7 / 3, 10 / 3 |
+| 6 | 6 | 31 | not predicted | 5 / 3, 11 / 2, 13 / 1 |
+| 7 | 40 | 8 | 16 / 2.0000 | 5 / 3, 12 / 4, 22 / 2 |
+| 8 | 34 | 19 | 3 / 5.0000 (top-score tie) | 13 / 1, 18 / 5, 23 / 4 |
+| 9 | 27 | 6 | 18 / 1.0000 | 4 / 3, 14 / 1, 19 / 5 |
+| 10 | 13 | 1 | 20 / 1.0000 | 5 / 3, 15 / 3, 20 / 4 |
+| 11 | 40 | 2 | 7 / 4.0000 | 6 / 2, 16 / 1, 21 / 4 |
+| 12 | 40 | 1 | 20 / 2.0000 | 2 / 1, 5 / 1, 7 / 4 |
+| 13 | 36 | 4 | 22 / 1.0000 | 6 / 1, 8 / 1, 15 / 3 |
+| 14 | 25 | 10 | 2 / 5.0000 (top-score tie) | 4 / 4, 9 / 1, 19 / 4 |
+| 15 | 28 | 11 | 17 / 1.0000 | 10 / 3, 13 / 3, 20 / 2 |
+| 16 | 23 | 2 | 8 / 4.0000 | 4 / 1, 6 / 4, 11 / 1 |
+| 17 | 24 | 1 | 16 / 1.0000 | 6 / 3, 12 / 4, 22 / 4 |
+| 18 | 8 | 39 | 15 / 2.0000 | 5 / 1, 8 / 5, 13 / 1 |
+| 19 | 33 | 6 | not predicted | 4 / 5, 9 / 5, 14 / 4 |
+| 20 | 22 | 1 | 11 / 3.0000 | 5 / 4, 10 / 4, 15 / 2 |
+| 21 | 29 | 2 | 19 / 1.0000 | 11 / 4, 16 / 4, 6 / 2 |
+| 22 | 32 | 13 | not predicted | 7 / 2, 17 / 4, 12 / 4 |
+| 23 | 29 | 4 | 11 / 3.0000 | 8 / 4, 13 / 3, 16 / 1 |
+
+All 22 reference foods are valid unrated candidates in each user's training snapshot (28 candidates/user). Python predicts 19/22 reference items: four are tied with Python's maximum score, 15 rank below it, and users 6/19/22 have no selected-neighbor prediction for the reference item. These diagnostics localize behavior but cannot distinguish missing-value handling, neighbor/tie policy, scoring, or a screenshot/workflow mismatch.
+
+**Parity status: BLOCKED / Pending Validation.** Evidence still required: complete Altair workflow used for train-264; native exported output CSV for train-264 and toy-43; exact Altair AI Studio and recommender extension versions/settings; per-user neighbor IDs and similarities; per-candidate prediction scores before ranking; confirmed provenance of the 879-row source and 264/66 split. Do not change Python to fit transcribed output.
 
 ### Separate 264/66 rating-prediction holdout
 

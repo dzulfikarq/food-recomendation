@@ -33,11 +33,40 @@ function configurationResponse(config: Awaited<ReturnType<typeof prisma.recommen
 export async function GET(request: Request) {
   const authorization = await requireAdminRequest(request);
   if (!authorization.user) return authorization.response;
-  const [config, dataset, jobCounts, workers] = await Promise.all([
+  const [config, dataset, jobCounts, workers, recentJobs, lastPublishedBatch] = await Promise.all([
     prisma.recommendationEngineConfig.findUniqueOrThrow({ where: { id: 1 } }),
     prisma.ratingDatasetState.findUniqueOrThrow({ where: { id: 1 } }),
     prisma.recommendationJob.groupBy({ by: ["status"], _count: { _all: true } }),
-    prisma.recommendationWorker.findMany({ orderBy: { lastSeenAt: "desc" }, take: 20 })
+    prisma.recommendationWorker.findMany({ orderBy: { lastSeenAt: "desc" }, take: 20 }),
+    prisma.recommendationJob.findMany({
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+      take: 10,
+      select: {
+        id: true,
+        trigger: true,
+        status: true,
+        engineVersion: true,
+        attemptCount: true,
+        maxAttempts: true,
+        startedAt: true,
+        finishedAt: true,
+        errorSummary: true,
+        datasetExport: { select: { ratingRevision: true } },
+        artifact: {
+          select: {
+            verificationStatus: true,
+            sourceRatingRevision: true,
+            currentRatingRevision: true,
+            isStale: true
+          }
+        }
+      }
+    }),
+    prisma.recommendationBatch.findFirst({
+      where: { status: "PUBLISHED" },
+      orderBy: [{ publishedAt: "desc" }, { id: "desc" }],
+      select: { id: true, publishedAt: true }
+    })
   ]);
   const jobs = { pending: 0, running: 0, failed: 0 };
   for (const item of jobCounts) {
@@ -66,6 +95,26 @@ export async function GET(request: Request) {
         lastOutcome: config.lastSchedulerReason
       },
       jobs,
+      recentJobs: recentJobs.map((job) => ({
+        id: job.id,
+        trigger: job.trigger,
+        status: job.status,
+        datasetRevision: job.datasetExport.ratingRevision.toString(),
+        engineVersion: job.engineVersion,
+        attemptCount: job.attemptCount,
+        maxAttempts: job.maxAttempts,
+        startedAt: job.startedAt,
+        finishedAt: job.finishedAt,
+        durationMs: job.startedAt ? Math.max(0, (job.finishedAt?.getTime() ?? now) - job.startedAt.getTime()) : null,
+        errorSummary: job.errorSummary,
+        artifact: job.artifact ? {
+          verificationStatus: job.artifact.verificationStatus,
+          sourceRatingRevision: job.artifact.sourceRatingRevision.toString(),
+          currentRatingRevision: job.artifact.currentRatingRevision.toString(),
+          isStale: job.artifact.isStale
+        } : null
+      })),
+      lastPublishedBatch,
       workers: workers.map((worker) => ({
         workerId: worker.workerId,
         engineVersion: worker.engineVersion,

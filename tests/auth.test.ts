@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { safeUserCallbackPath } from "@/lib/auth-redirect";
 import { loginSchema, registrationSchema } from "@/lib/validation/auth";
 
 test("registration trims and normalizes user-provided identity", () => {
@@ -34,4 +35,12 @@ test("login validation normalizes email and does not expose detailed credential 
   assert.equal(valid.success, true);
   if (valid.success) assert.equal(valid.data.email, "user@example.com");
   assert.equal(loginSchema.safeParse({ email: "user@example.com", password: "" }).success, false);
+});
+
+test("post-auth callback only accepts known same-origin user destinations", () => {
+  assert.equal(safeUserCallbackPath("/research"), "/research");
+  assert.equal(safeUserCallbackPath("/research/rate"), "/research/rate");
+  for (const value of ["https://evil.example", "//evil.example", "/admin", "/research?next=https://evil.example", null]) {
+    assert.equal(safeUserCallbackPath(value), "/");
+  }
 });

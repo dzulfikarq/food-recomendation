@@ -8,11 +8,12 @@ import { Alert, Button, InputField } from "@/components/ui";
 
 const initialState: AuthActionState = {};
 
-export function RegisterForm() {
+export function RegisterForm({ callbackURL = "/" }: { callbackURL?: string }) {
   const [state, action, pending] = useActionState(registerAction, initialState);
 
   return (
     <form action={action} className="space-y-4" aria-busy={pending}>
+      <input type="hidden" name="callbackURL" value={callbackURL} />
       {state.error && <Alert>{state.error}</Alert>}
       <InputField label="Nama lengkap" name="name" type="text" autoComplete="name" placeholder="Nama kamu" minLength={2} maxLength={120} required />
       <InputField label="Email" name="email" type="email" autoComplete="email" placeholder="nama@email.com" maxLength={254} required />
@@ -20,7 +21,7 @@ export function RegisterForm() {
       <InputField label="Konfirmasi password" name="confirmPassword" type="password" autoComplete="new-password" placeholder="Ulangi password" minLength={8} maxLength={128} required />
       <p className="m-0 rounded-xl bg-soft px-3.5 py-3 text-xs leading-5 text-orange-950">Akun yang dibuat lewat pendaftaran selalu ber-role USER.</p>
       <Button type="submit" loading={pending} className="w-full">Buat akun <ArrowRight size={17} aria-hidden="true" /></Button>
-      <p className="m-0 text-center text-sm text-secondary">Sudah punya akun? <Link href="/login" className="font-bold text-primary hover:text-primary-hover">Masuk</Link></p>
+      <p className="m-0 text-center text-sm text-secondary">Sudah punya akun? <Link href={`/login?callbackURL=${encodeURIComponent(callbackURL)}`} className="font-bold text-primary hover:text-primary-hover">Masuk</Link></p>
     </form>
   );
 }

@@ -50,7 +50,7 @@ export function ConsentPanel({ study, available, canParticipate, participation }
   }
 
   if (!canParticipate) {
-    return <Card className="p-5 sm:p-6"><h2 className="m-0 text-lg font-bold">Ingin berpartisipasi?</h2><p className="mt-2 text-sm leading-6 text-secondary">Masuk atau buat akun USER. Persetujuan penelitian tetap diminta secara terpisah; akun lama tidak otomatis menjadi responden.</p><div className="flex flex-wrap gap-3"><ButtonLink href={`/login?callbackURL=${encodeURIComponent("/research")}`}>Masuk</ButtonLink><ButtonLink href="/register" variant="secondary">Buat akun</ButtonLink></div></Card>;
+    return <Card className="p-5 sm:p-6"><h2 className="m-0 text-lg font-bold">Ingin berpartisipasi?</h2><p className="mt-2 text-sm leading-6 text-secondary">Masuk atau buat akun USER. Persetujuan penelitian tetap diminta secara terpisah; akun lama tidak otomatis menjadi responden.</p><div className="flex flex-wrap gap-3"><ButtonLink href={`/login?callbackURL=${encodeURIComponent("/research")}`}>Masuk</ButtonLink><ButtonLink href={`/register?callbackURL=${encodeURIComponent("/research")}`} variant="secondary">Buat akun</ButtonLink></div></Card>;
   }
 
   if (participation?.status === "WITHDRAWAL_REQUESTED" || participation?.status === "WITHDRAWN") {

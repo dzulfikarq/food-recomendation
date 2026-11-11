@@ -12,8 +12,10 @@ const baseURL = process.env.AUTH_URL ?? "http://127.0.0.1:3110";
 const runId = process.env.FOODREC_E2E_RUN_ID ?? randomUUID();
 const userAPassword = randomBytes(18).toString("base64url");
 const userBPassword = randomBytes(18).toString("base64url");
+const userCPassword = randomBytes(18).toString("base64url");
 const userAEmail = `phase-f-user-a-${runId}@example.test`;
 const userBEmail = `phase-f-user-b-${runId}@example.test`;
+const userCEmail = `phase-f-user-c-${runId}@example.test`;
 const adminEmail = process.env.ADMIN_EMAIL!;
 const adminPassword = process.env.ADMIN_PASSWORD!;
 const screenshotDir = path.resolve("test-results/phase-f/screenshots");
@@ -22,6 +24,7 @@ let food1Id = 0;
 let food2Id = 0;
 let userAId = 0;
 let userBId = 0;
+let researchStudyUnderTest: number | undefined;
 
 async function query<T extends pg.QueryResultRow = pg.QueryResultRow>(sql: string, values: unknown[] = []) {
   const client = new pg.Client({ connectionString: process.env.FOODREC_TEST_DATABASE_URL ?? process.env.DATABASE_URL });
@@ -60,6 +63,7 @@ async function rateFood(page: Page, name: string, score: number) {
 async function login(page: Page, email: string, password: string) {
   await page.goto("/login");
   await expectLabeledFormControls(page);
+  await expectNoHorizontalOverflow(page);
   await page.getByLabel("Email").fill(email);
   await page.getByLabel("Password").fill(password);
   await page.getByRole("button", { name: "Masuk", exact: true }).click();
@@ -76,6 +80,12 @@ async function sameOriginJson(page: Page, url: string, method: "PATCH" | "POST",
     return { status: response.status, body: await response.json() };
   }, { url, method, body });
 }
+
+test.afterEach(async () => {
+  if (researchStudyUnderTest === undefined) return;
+  await query('UPDATE "ResearchStudy" SET status = $1 WHERE id = $2 AND status = $3', ["CLOSED", researchStudyUnderTest, "OPEN"]);
+  researchStudyUnderTest = undefined;
+});
 
 test("Guest registration, protected access, responsive navigation, and USER rating journey", async ({ page }) => {
   await mkdir(screenshotDir, { recursive: true });
@@ -376,6 +386,8 @@ test("Research consent, mobile rating, admin export checksum, and study closure"
   await login(page, adminEmail, adminPassword);
   await page.goto("/admin/research");
   await expect(page.getByRole("heading", { name: "Pengumpulan Data Penelitian" })).toBeVisible();
+  await expectNoHorizontalOverflow(page);
+  await page.screenshot({ path: path.join(screenshotDir, "research-admin-desktop.png"), fullPage: true });
   await page.getByRole("button", { name: "Buat penelitian" }).click();
   const title = `Studi browser ${runId.slice(0, 8)}`;
   const start = new Date(Date.now() - 60 * 60_000);
@@ -399,32 +411,94 @@ test("Research consent, mobile rating, admin export checksum, and study closure"
   await expectLabeledFormControls(page);
   await page.getByRole("button", { name: "Buat draft penelitian" }).click();
   await expect(page.getByRole("heading", { name: title })).toBeVisible();
+  const createdStudy = (await query<{ id: number }>('SELECT id FROM "ResearchStudy" WHERE title = $1', [title])).rows[0];
+  if (!createdStudy) throw new Error("Created E2E study was not found in test database.");
+  researchStudyUnderTest = createdStudy.id;
   await page.getByRole("button", { name: "Buka pengumpulan" }).click();
   await expect(page.getByText("OPEN", { exact: true })).toBeVisible();
 
   await page.getByRole("button", { name: "Keluar" }).click();
-  await login(page, userAEmail, userAPassword);
+  await page.setViewportSize({ width: 1440, height: 960 });
+  await page.goto("/research");
+  await expect(page.getByRole("heading", { name: title })).toBeVisible();
+  await expect(page.getByText("Kontak Uji (research@example.test)")).toBeVisible();
+  await expectNoHorizontalOverflow(page);
+  await page.getByRole("link", { name: "Buat akun" }).click();
+  await expect(page).toHaveURL(/\/register\?callbackURL=%2Fresearch$/);
+  await page.getByLabel("Nama lengkap").fill("QA Responden Penelitian");
+  await page.getByLabel("Email", { exact: true }).fill(userCEmail);
+  await page.getByLabel("Password", { exact: true }).fill(userCPassword);
+  await page.getByLabel("Konfirmasi password").fill(userCPassword);
+  await page.getByRole("button", { name: "Buat akun", exact: true }).click();
+  await expect(page).toHaveURL((url) => url.pathname === "/research");
+  await expect(page.getByRole("heading", { name: title })).toBeVisible();
+  await expect(page.getByText("Ingin berpartisipasi?")).toHaveCount(0);
+
+  await page.getByRole("button", { name: "Keluar" }).click();
+  await expect(page).toHaveURL((url) => url.pathname === "/");
+  await expect(page.getByRole("link", { name: "Masuk", exact: true }).first()).toBeVisible();
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/research");
+  await expectNoHorizontalOverflow(page);
+  await page.getByRole("link", { name: "Masuk", exact: true }).last().click();
+  await expect(page).toHaveURL(/\/login\?callbackURL=%2Fresearch$/);
+  await expectNoHorizontalOverflow(page);
+  await page.getByLabel("Email").fill(userCEmail);
+  await page.getByLabel("Password").fill(userCPassword);
+  await page.getByRole("button", { name: "Masuk", exact: true }).click();
+  await expect(page).toHaveURL((url) => url.pathname === "/research");
+  await page.setViewportSize({ width: 1440, height: 960 });
   await expect(page.getByRole("heading", { name: title })).toBeVisible();
   const consent = page.getByLabel(/Saya telah membaca dokumen persetujuan versi/);
   await expect(consent).not.toBeChecked();
   await consent.check();
   await page.getByRole("button", { name: "Setuju dan lanjutkan" }).click();
   await expect(page).toHaveURL(/\/research\/rate$/);
+  await expectNoHorizontalOverflow(page);
   await page.getByLabel("Cari makanan").fill("Nasi Goreng");
   const group = page.getByRole("radiogroup", { name: "Rating Nasi Goreng" });
   await group.getByRole("radio", { name: "4 dari 5, suka" }).check({ force: true });
   await page.getByLabel("Saya pernah mencoba makanan ini.").check();
   await page.getByRole("button", { name: "Simpan rating penelitian" }).click();
   await expect(page.getByRole("status").filter({ hasText: "Rating penelitian tersimpan." })).toBeVisible();
-  await expect(page.getByText(/1 dari \d+ makanan aktif sudah dinilai/)).toBeVisible();
+  await group.getByRole("radio", { name: "5 dari 5, sangat suka" }).check({ force: true });
+  await page.getByRole("button", { name: "Simpan perubahan" }).click();
+  await expect(page.getByRole("status").filter({ hasText: "Rating penelitian tersimpan." })).toBeVisible();
+
+  await page.getByLabel("Cari makanan").fill("Mie Goreng");
+  const skippedGroup = page.getByRole("radiogroup", { name: "Rating Mie Goreng" });
+  await skippedGroup.getByRole("radio", { name: "3 dari 5, biasa saja" }).check({ force: true });
+  await expect(page.getByRole("button", { name: "Simpan rating penelitian" })).toBeDisabled();
+  await expect(page.getByText("Rating penelitian tersimpan: 3/5")).toHaveCount(0);
+
+  await page.goto("/research");
+  await expect(page.getByText(/1 makanan sudah kamu nilai/)).toBeVisible();
+  await page.getByRole("link", { name: "Lanjutkan penilaian" }).click();
+  await expect(page).toHaveURL(/\/research\/rate$/);
+  await expect(page.getByText("Rating penelitian tersimpan: 5/5")).toBeVisible();
+  const resumedNasiCard = page.locator("section").filter({ has: page.getByRole("heading", { name: "Nasi Goreng", exact: true }) }).first();
+  await expect(resumedNasiCard.getByLabel("Saya pernah mencoba makanan ini.")).toBeChecked();
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.getByLabel("Cari makanan").fill("Mie Goreng");
+  const skippedMobileGroup = page.getByRole("radiogroup", { name: "Rating Mie Goreng" });
+  await skippedMobileGroup.getByRole("radio", { name: "2 dari 5, kurang suka" }).check({ force: true });
+  await expect(page.getByRole("button", { name: "Simpan rating penelitian" })).toBeDisabled();
+  await page.getByLabel("Cari makanan").fill("Nasi Goreng");
+  const mobileGroup = page.getByRole("radiogroup", { name: "Rating Nasi Goreng" });
+  await expect(mobileGroup.getByRole("radio", { name: "5 dari 5, sangat suka" })).toBeChecked();
+  const mobileNasiCard = page.locator("section").filter({ has: page.getByRole("heading", { name: "Nasi Goreng", exact: true }) }).first();
+  await expect(mobileNasiCard.getByLabel("Saya pernah mencoba makanan ini.")).toBeChecked();
+  await mobileGroup.getByRole("radio", { name: "4 dari 5, suka" }).check({ force: true });
+  await page.getByRole("button", { name: "Simpan perubahan" }).click();
+  await expect(page.getByRole("status").filter({ hasText: "Rating penelitian tersimpan." })).toBeVisible();
   await expectNoHorizontalOverflow(page);
   await page.screenshot({ path: path.join(screenshotDir, "research-rating-mobile.png"), fullPage: true });
   await page.getByRole("button", { name: "Selesaikan sesi" }).click();
   await expect(page.getByText(/Terima kasih atas partisipasimu/)).toBeVisible();
 
   await page.getByRole("button", { name: "Keluar" }).click();
+  await page.setViewportSize({ width: 1440, height: 960 });
   await login(page, adminEmail, adminPassword);
   await page.goto("/admin/research");
   await expect(page.getByRole("button", { name: "Buat snapshot CSV + manifest" })).toBeVisible();
@@ -444,6 +518,38 @@ test("Research consent, mobile rating, admin export checksum, and study closure"
   const manifestResponse = await page.request.get(new URL(manifestHref!, baseURL).toString());
   expect(manifestResponse.ok()).toBeTruthy();
   expect((await manifestResponse.json()).data.sha256).toBe(checksum);
+
+  await page.getByRole("button", { name: "Keluar" }).click();
+  await expect(page).toHaveURL((url) => url.pathname === "/");
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/research");
+  await page.getByRole("link", { name: "Masuk", exact: true }).last().click();
+  await page.getByLabel("Email").fill(userCEmail);
+  await page.getByLabel("Password").fill(userCPassword);
+  await page.getByRole("button", { name: "Masuk", exact: true }).click();
+  await expect(page).toHaveURL((url) => url.pathname === "/research");
+  page.once("dialog", (dialog) => dialog.accept());
+  await page.getByRole("button", { name: "Tarik partisipasi penelitian" }).click();
+  await expect(page.getByText(/penarikan sedang diproses/)).toBeVisible();
+  await expectNoHorizontalOverflow(page);
+  await page.screenshot({ path: path.join(screenshotDir, "research-withdrawal-mobile.png"), fullPage: true });
+
+  await page.getByRole("button", { name: "Keluar" }).click();
+  await page.setViewportSize({ width: 1440, height: 960 });
+  await login(page, adminEmail, adminPassword);
+  await page.goto("/admin/research");
+  await expect(page.getByText("REVOCATION_REQUIRED", { exact: true })).toBeVisible();
+  const handleRevocationDialogs = async (dialog: import("@playwright/test").Dialog) => {
+    if (dialog.type() === "confirm") await dialog.accept();
+    else if (dialog.type() === "prompt") await dialog.accept("Penerima uji diberi tahu saat pengujian E2E.");
+  };
+  page.on("dialog", handleRevocationDialogs);
+  await page.getByRole("button", { name: "Proses revokasi" }).click();
+  page.off("dialog", handleRevocationDialogs);
+  await expect(page.getByText("REVOKED", { exact: true })).toBeVisible();
+  page.once("dialog", (dialog) => dialog.accept());
+  await page.getByRole("button", { name: "Proses penarikan" }).click();
+  await expect(page.getByText("Tidak ada permintaan withdrawal tertunda.")).toBeVisible();
   await page.getByRole("button", { name: "Tutup pengumpulan" }).click();
   await expect(page.getByText("CLOSED", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Arsipkan studi" }).click();

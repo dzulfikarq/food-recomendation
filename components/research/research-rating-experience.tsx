@@ -41,7 +41,8 @@ export function ResearchRatingExperience({ studyId, foods: initialFoods, canRate
 
   async function saveRating(foodId: number) {
     const rating = selectedRatings[foodId];
-    if (!canRate || !tried[foodId] || !rating) return;
+    const previouslyAttested = (foods.find((food) => food.id === foodId)?.rating ?? null) !== null;
+    if (!canRate || !(tried[foodId] ?? previouslyAttested) || !rating) return;
     setPendingFood(foodId);
     setPageError(null);
     setErrors((current) => ({ ...current, [foodId]: "" }));
@@ -126,8 +127,8 @@ export function ResearchRatingExperience({ studyId, foods: initialFoods, canRate
             <span className="ml-2 text-xs font-semibold text-gray-700">{displayedRating ? labels[displayedRating - 1] : "Pilih nilai"}</span>
           </div>
           <p className="mb-0 mt-2 text-[11px] leading-5 text-secondary">1 Tidak suka · 2 Kurang suka · 3 Biasa saja · 4 Suka · 5 Sangat suka</p>
-          <label className="mt-3 flex items-start gap-2 text-xs leading-5 text-gray-700"><input type="checkbox" className="mt-1 accent-orange-600" checked={tried[food.id] ?? false} onChange={(event) => setTried((current) => ({ ...current, [food.id]: event.target.checked }))} />Saya pernah mencoba makanan ini.</label>
-          <Button className="mt-3 min-h-10 w-full px-3 text-xs" loading={pendingFood === food.id} disabled={!canRate || completed || pendingFood === food.id || !displayedRating || !tried[food.id]} onClick={() => saveRating(food.id)}>{food.rating === null ? "Simpan rating penelitian" : "Simpan perubahan"}</Button>
+          <label className="mt-3 flex items-start gap-2 text-xs leading-5 text-gray-700"><input type="checkbox" className="mt-1 accent-orange-600" checked={tried[food.id] ?? (food.rating !== null)} onChange={(event) => setTried((current) => ({ ...current, [food.id]: event.target.checked }))} />Saya pernah mencoba makanan ini.</label>
+          <Button className="mt-3 min-h-10 w-full px-3 text-xs" loading={pendingFood === food.id} disabled={!canRate || completed || pendingFood === food.id || !displayedRating || !(tried[food.id] ?? (food.rating !== null))} onClick={() => saveRating(food.id)}>{food.rating === null ? "Simpan rating penelitian" : "Simpan perubahan"}</Button>
           {success[food.id] && <p role="status" className="mb-0 mt-2 text-xs font-semibold text-green-800">{success[food.id]}</p>}
           {errors[food.id] && <Alert className="mt-2 px-3 py-2 text-xs">{errors[food.id]}</Alert>}
         </fieldset>

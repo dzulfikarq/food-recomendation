@@ -87,3 +87,11 @@ Jika sumber yang benar adalah export aplikasi lama, minta file primer beserta me
 ## Status FoodRec
 
 Python Engine, database, workflow Altair, dan validation gate tidak diubah. Tidak ada eksperimen/optimasi final, database read/write/reset, push, atau deploy. Mathematical parity tetap **PENDING VALIDATION**; artifact **UNVERIFIED**; auto-processing dan automatic publication **OFF**.
+
+## Pengumpulan data penelitian baru
+
+FoodRec menyediakan fitur pengumpulan responden terpisah (`ResearchStudy`, `ResearchConsent`, `ResearchParticipant`, `ResearchRating`). Fitur ini tidak mengubah kesimpulan audit snapshot 879 dan tidak mengimpor rating lama/demo. Dataset baru hanya dapat berasal dari jalur consent dan rating penelitian; source `CONSENTED_USER_ACTION` merekam jalur aplikasi, bukan bukti independen identitas atau kelayakan responden.
+
+CSV penelitian memakai `ResearchParticipant.id` pseudonim serta `Food.id`, dengan manifest/checksum dan consent version. Relasi akun tetap tersedia terbatas untuk consent/withdrawal, sehingga dataset **pseudonymous, bukan anonymous**. Persetujuan etik, sampling, kualitas responden, verifikasi instrumen, serta kecukupan untuk evaluasi CF tidak disimpulkan dari implementasi software. Cara ekspor/verifikasi dan batas withdrawal ada di [`RESEARCH_DATA_COLLECTION.md`](RESEARCH_DATA_COLLECTION.md); panduan responden di [`RESEARCH_PARTICIPANT_GUIDE.md`](RESEARCH_PARTICIPANT_GUIDE.md).
+
+Research data belum menjadi input Altair, `DatasetExport`, Python engine, `RecommendationJob`, `RecommendationBatch`, atau publikasi. Altair parity tetap **PENDING VALIDATION**, artifact **UNVERIFIED**, automatic processing/publication **OFF**.

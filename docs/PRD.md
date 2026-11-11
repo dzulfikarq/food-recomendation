@@ -75,6 +75,19 @@ Pengguna membutuhkan cara menemukan makanan sesuai preferensi, sementara pola ra
 | AD-08 | Workflow enam tahap menampilkan status berbasis bukti database; dataset dapat disiapkan/diunduh, Altair dijalankan manual, hasil diimpor/divalidasi, publikasi tetap manual, dan riwayat audit tidak berubah. | Browser E2E and PostgreSQL workflow integration pass with synthetic CSV; real Altair research file and manual accessibility review Pending Validation |
 | AD-09 | Admin membaca gate/config, dirty revision, scheduler, job detail, safe errors, stale/UNVERIFIED artifact, heartbeat kedaluwarsa, batch published terakhir, serta last successful computation lewat API monitoring existing; UI tidak mengubah gate. | PostgreSQL integration and browser gate/worker E2E pass; automatic processing/publication remain locked |
 
+### Pengumpulan data penelitian (isolated)
+
+| ID | Requirement | Status |
+| --- | --- | --- |
+| R-01 | Admin membuat/mengubah draft, mengatur periode, versi/dokumen consent, kontak, retensi, status; maksimal satu studi OPEN; CLOSED/ARCHIVED frozen. | PostgreSQL integration lulus; migrations additive pada `_test` |
+| R-02 | `/research` menampilkan tujuan, data, penggunaan, voluntary status, skip policy, withdrawal, contact; consent checkbox unchecked and versioned. | PostgreSQL integration dan Chromium E2E lulus |
+| R-03 | `/research/rate` memberi search/filter, Food ID catalog, 1–5 named rating, tried-food attestation, feedback/progress, skip/continue/complete without minimum. | PostgreSQL integration dan Chromium E2E lulus; zero-rating completion teruji |
+| R-04 | Consent-gated writes use separate ResearchRating/source, idempotency, unique participant-food, audit changes; no import from ordinary Rating/demo. | PostgreSQL integration lulus; rating count/revision existing tidak berubah |
+| R-05 | Admin dashboard reports consent/active/completed/respondent/rating/food distributions, sparse-matrix description, and pending withdrawal without respondent PII. | PostgreSQL integration dan Chromium E2E lulus |
+| R-06 | Admin exports versioned CSV `user_id,food_id,rating` using pseudonymous participant ID and Food.id; snapshot manifest/checksum excludes PII. | PostgreSQL integration dan Chromium E2E lulus; SHA-256/row counts diverifikasi |
+| R-07 | Withdrawal excludes future exports, preserves audit evidence, marks prior exports, blocks download, and supports explicit revocation review. | PostgreSQL integration lulus; old export download blocked and revocation recorded |
+| R-08 | Research dataset remains disconnected from DatasetExport, Altair, queue, worker, RecommendationBatch, and publication. | PostgreSQL isolation regression lulus; Recommendation gate tetap OFF |
+
 ## 6. User Flows
 
 ### Registrasi — Implemented
@@ -189,7 +202,7 @@ Better Auth memerlukan tabel teknis Session, Account, Verification. Session/Acco
 | Fase | Cakupan | Status | Dependensi |
 | --- | --- | --- | --- |
 | 1. Project Foundation & Design System | Next.js, TS, Tailwind, fonts/icons, layouts, home, shared primitives, errors. | Implemented; UI review Pending Validation | — |
-| 2. Database Foundation, Authentication & Authorization | PostgreSQL, tujuh model domain, Better Auth, roles, seed, protected dashboard. | Implemented; isolated PostgreSQL integration lulus; production DB Pending Validation | F1 |
+| 2. Database Foundation, Authentication & Authorization | PostgreSQL domain models, Better Auth, roles, seed, protected dashboard; separate Research* schema. | Implemented; isolated PostgreSQL integration lulus; production DB Pending Validation | F1 |
 | 3. Food Management | Admin list/search/filter/sort/pagination, CRUD, image upload, hybrid delete/reactivate, CSV template/preview/insert-only import, 40 food seed. | Implemented; PostgreSQL integration lulus | F2 |
 | 4. Rating workflows & data exchange | Public catalog, rating 1–5/history, Admin snapshot CSV `user_id,food_id,rating`. | Implemented; PostgreSQL integration lulus | F3 |
 | 5. Altair workflow | Manual UBCF/Cosine/user k-NN process; exchange rating/result CSV. | Workflow contract implemented; Altair real-file compatibility Pending Validation | F4 |
@@ -198,6 +211,7 @@ Better Auth memerlukan tabel teknis Session, Account, Verification. Session/Acco
 | V2 Phase D | Durable rating revisions, worker-polled PostgreSQL scheduler, locked config/gates, dedupe/stale metadata, monitoring API. | Implemented; PostgreSQL integration tested; automatic enqueue blocked by DB trigger and gate constraints. | V2 Phase C; parity validation remains pending |
 | V2 Phase E | Admin dashboard/engine monitoring UX dan workflow Altair enam tahap; USER rating/rekomendasi existing dipertahankan. | Implemented; build/lint/typecheck, 15 npm tests, 24 Python tests, 6 PostgreSQL suites, and 4 Chromium E2E journeys pass. Manual assistive-technology review Pending Validation. | Phase D |
 | V2 Phase F | Full QA, subsystem readiness, and gate review. | **QA complete** for browser journeys, manual CSV workflow, security gates, and real worker staging. Mathematical parity and real Altair export compatibility remain Pending Validation; no gate opened. | Original Altair evidence + separate approval |
+| Research collection V1 | Consent-gated respondent collection, Admin study/dashboard, pseudonymous export, retention metadata, withdrawal/revocation. | Implemented; 21 unit tests, 7 PostgreSQL integration suites, 5 Chromium journeys, lint/typecheck/build/Prisma validate pass on isolated `_test`. No production migration/deploy. | Better Auth + separate research schema |
 | 8. Hardening/release | Security, accessibility, load, operations and deployment. | Planned | F1–F7 |
 
 ## 15. Acceptance Criteria
@@ -210,7 +224,7 @@ Better Auth memerlukan tabel teknis Session, Account, Verification. Session/Acco
 | Login/session/logout | Login valid, error generik, session bertahan refresh, logout mencabut session. | Better Auth/PostgreSQL integration lulus |
 | Authorization | Guest/USER ditolak dari `/admin`; ADMIN dapat masuk; server layout/page cek role. | Guest/USER/ADMIN route integration lulus |
 | Admin seed | Env-backed, idempotent, no hardcoded credential, existing USER tidak dipromosikan. | Seed idempotence dan admin login lulus |
-| Database | Tujuh model, auth tables, migration valid, unique/FK/check/trigger sesuai schema. | Migration applied; unique/CHECK/FK/foodCode trigger diuji pada PG17 |
+| Database | Core/auth models plus isolated Research* tables, migrations, unique/FK/check/trigger. | Additive migrations and research lifecycle/immutability triggers applied/tested on PostgreSQL `_test`; production DB Pending Validation |
 | Food Management F3 | Admin CRUD/list, immutable code, uploads, status, hybrid delete and reactivation. | PostgreSQL integration lulus |
 | CSV food import F3 | Strict parser, UTF-8/template/preview, duplicate checks, no partial commit, concurrent/idempotent commit, audit history. | PostgreSQL integration lulus |
 | Rating F4 | Guest tidak bisa menulis; USER create/update 1–5; unique user-food; inactive food ditolak; firstUsedAt ditandai; history privat tersedia. | PostgreSQL integration lulus |
@@ -223,6 +237,7 @@ Better Auth memerlukan tabel teknis Session, Account, Verification. Session/Acco
 ## 16. Open Questions & Risks
 
 - Production PostgreSQL credentials/availability masih Pending Validation; migration/auth tests lulus pada isolated PostgreSQL 17 sementara.
+- Research V1 uses additive migrations and separate storage/tables. Current research tests are pending; dataset is not a recommendation input. No production migration or deployment is authorized by this feature.
 - Local image storage requires persistent filesystem; serverless/ephemeral production hosting needs a mounted volume or object storage provider. Production storage provider has not been configured.
 - Rating CSV snapshot saat ini dibuffer di memory; verifikasi benchmark dan pindah ke cursor streaming sebelum dataset membesar.
 - Import preview drafts are private server files keyed by an opaque staging key; an automated retention/expiry cleanup job is not implemented.

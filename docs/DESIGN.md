@@ -21,6 +21,8 @@ Beranda → jelajahi katalog aktif → daftar atau masuk untuk memberi rating. K
 
 Daftar/masuk → beranda personal → jelajahi makanan → beri atau perbarui rating → lihat Rating Saya → lihat Rekomendasi.
 
+Partisipasi penelitian terpisah dan sukarela: `/research` → baca dokumen → consent checkbox unchecked → `/research/rate` → nilai makanan pernah dicoba, lewati yang lain → lanjutkan atau selesaikan → withdrawal tersedia pada status penelitian.
+
 Beranda menampilkan sapaan, jumlah rating tersimpan, langkah berikutnya, tautan katalog/rating, status rekomendasi, dan tanggal publikasi jika tersedia. Jumlah rating tidak menjadi ambang dan bukan jaminan hasil.
 
 ### ADMIN
@@ -39,10 +41,13 @@ FoodRec tidak menghitung UBCF/Cosine Similarity, tidak terhubung otomatis ke Alt
 | `/foods/[id]` | Foto/placeholder, nama, kategori, deskripsi, asal/rasa, serta kontrol rating. |
 | `/my-ratings` | Ringkasan jumlah dan rata-rata rating, navigasi kembali ke katalog, serta riwayat akun aktif. Rating makanan aktif dapat diubah; makanan nonaktif tetap terlihat sebagai riwayat. |
 | `/recommendations` | Judul “Rekomendasi Untukmu”, penjelasan pola rating, tanggal pembaruan, kartu berperingkat dan tautan detail. Empty state dibedakan berdasarkan status backend. |
+| `/research` | Baca studi, tujuan, data, penggunaan, kontak, periode/retensi, teks consent; status consent/progress, partisipasi sukarela, withdrawal. Consent checkbox tidak dicentang default. |
+| `/research/rate` | Search, filter kategori/status, catalog Food ID, mobile-friendly bintang 1–5 dan label, tried-food attestation, progress, save/update feedback, skip, continue, complete tanpa target. Tidak menampilkan rating user lain. |
 | `/admin` | Statistik aktual: makanan aktif, pengguna pemberi rating, total rating, dataset, batch aktif, dan publikasi terakhir. Monitoring menampilkan revision dataset, gate, job terbaru, heartbeat worker, serta langkah berikutnya kondisional. |
 | `/admin/foods` | Katalog dengan pencarian/filter server-side, pagination, status, CRUD, dan empty state berbeda untuk katalog kosong vs filter tanpa hasil. |
 | `/admin/ratings` | Jumlah rating, pembuatan snapshot, pencarian ID/nama file, riwayat snapshot berpaginasi, checksum, unduhan terproteksi, loading dan empty state. |
 | `/admin/recommendations` | Overview engine dan job monitoring terpisah dari enam tahap workflow manual. Dataset, unduhan CSV, panduan Altair, impor, validasi, dan publikasi tampil berurutan; filter/pencarian riwayat ada di detail audit. |
+| `/admin/research` | Study CRUD/status dan consent text, statistik aktual tanpa PII respondent, distribusi/density deskriptif, withdrawal pending, CSV + manifest/checksum, download dan revocation review. |
 
 ## Status rekomendasi USER
 
@@ -81,6 +86,8 @@ Kecocokan format dengan ekspor penelitian Altair yang sebenarnya tetap **Pending
 - `RecommendationValidationReportView` — ringkasan, stale warnings, error per baris, dan preview.
 - `PublishRecommendationBatch` — konfirmasi publikasi custom dan feedback transaksi.
 - `EngineMonitoring` — ringkasan engine/job, heartbeat, safe error summary, revision dan artifact status melalui endpoint Admin terlindungi.
+- `ConsentPanel` / `ResearchRatingExperience` — persetujuan unchecked, checklist pernah mencoba, skala bernama, status/error/loading, tanpa target minimum.
+- `ResearchDashboard` / `ResearchStudyForm` — konfigurasi masa retensi, statistik pseudonim, export, dan tindakan withdrawal/revocation berotorisasi.
 - `FoodGridSkeleton` — state loading katalog dan riwayat rating.
 
 ## Sistem visual dan aksesibilitas

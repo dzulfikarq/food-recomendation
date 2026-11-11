@@ -1,8 +1,8 @@
 # Database FoodRec
 
-Provider aktual: PostgreSQL. Prisma schema: [`../prisma/schema.prisma`](../prisma/schema.prisma). Migrations: F1/F2 `20261017000000_phase1_2_foundation`, F3 `20261018000000_food_import_staging` dan `20261019000000_food_first_used_delete_guard`, recommendation `20261024000000_recommendation_management`, dan V2 Phase D `20261112000000_rating_change_tracking`, `20261112010000_recommendation_engine_config`, `20261112020000_recommendation_scheduler`, `20261112030000_lock_automatic_recommendations`.
+Provider aktual: PostgreSQL. Prisma schema: [`../prisma/schema.prisma`](../prisma/schema.prisma). Migrations include F1/F2 `20261017000000_phase1_2_foundation`, F3 `20261018000000_food_import_staging` dan `20261019000000_food_first_used_delete_guard`, recommendation `20261024000000_recommendation_management`, V2 Phase D migrations `20261112000000`–`20261112030000`, and research migrations `20261113000000_research_data_collection` through `20261116000000_research_audit_integrity`.
 
-## Tujuh model domain inti
+## Model domain aplikasi existing
 
 | Model | Data penting | Relasi dan integritas |
 | --- | --- | --- |
@@ -14,7 +14,23 @@ Provider aktual: PostgreSQL. Prisma schema: [`../prisma/schema.prisma`](../prism
 | `RecommendationBatch` | datasetExportId, import admin, publisher, status, kNeighbors, topN, similarity, filename/checksum/private file key, validationReport, timestamps | FK restrictive; params harus positif; batch tidak dapat dihapus via trigger; publishedAt/publisher wajib saat PUBLISHED; partial unique index mengizinkan maksimal satu batch PUBLISHED. |
 | `Recommendation` | batchId, userId, foodId, rank, timestamp | FK restrictive; unique batch-user-food dan batch-user-rank; rank positif; rows dibuat all-or-nothing dari CSV tervalidasi. |
 
-Semua ID domain numerik (`SERIAL`) untuk dataset penelitian. Timestamp database memakai PostgreSQL timestamp; Prisma `@updatedAt` mengisi update melalui client.
+## Model penelitian terpisah
+
+| Model | Data penting | Batasan |
+| --- | --- | --- |
+| `ResearchStudy` | Isi studi/consent, status, tanggal koleksi, `retentionUntil`, `retentionPolicy`, kontak | Status DRAFT/OPEN/CLOSED/ARCHIVED; partial unique satu OPEN; trigger mencegah perubahan CLOSED/ARCHIVED dan perubahan material tanpa versi consent baru. Retensi wajib sebelum OPEN. |
+| `ResearchParticipant` | pseudonym serial, relasi privat `userId`, status, progress/withdrawal timestamps | Unique `(studyId,userId)`; lifecycle trigger prevents withdrawal reversal, identity reassignment, and invalid completion transitions; pseudonymous, bukan anonymous. |
+| `ResearchConsent` | versi, salinan dokumen, waktu setuju/cabut | Unique participant-version; bukti immutable selain pencabutan satu kali. Version lama tidak otomatis memberi consent baru. |
+| `ResearchRating` | participant, `Food.id`, rating 1–5, consent version, source, waktu | Unique participant-food; source baru wajib `CONSENTED_USER_ACTION`; legacy source tidak diekspor. Tidak terkait `Rating`. |
+| `ResearchRatingChange` | CREATED/UPDATED, nilai lama/baru, consent version, source, idempotency key | Unique participant-key; immutable; withdrawal menghapus nilai dan change history sesuai proses yang tercatat. |
+| `ResearchWithdrawal` | status, requested/processed timestamps, admin | Satu withdrawal per participant; one-way processing; bukti status dipertahankan sesudah rating dihapus. |
+| `ResearchExport` / `ResearchExportParticipant` / `ResearchExportRevocation` | versi/checksum/manifest/counts, status revokasi, anggota pseudonim ekspor, tindakan revokasi | Snapshot dan membership immutable, no PII manifest, unduhan diblokir setelah withdrawal, revocation evidence immutable. File privat terpisah dari export aplikasi. |
+
+Migration source memberi existing rows `UNVERIFIED_LEGACY`, lalu menghapus DB default. API menulis `CONSENTED_USER_ACTION` eksplisit; export/dashboard hanya menghitung source terverifikasi. Tidak ada migrasi/copy dari tabel `Rating`.
+
+Migration audit integrity membuat consent revoke hanya saat withdrawal, membatasi rating/change deletion ke participant yang menarik diri, menjaga export membership immutable, dan mencegah participant/withdrawal lifecycle dibalik melalui SQL. These guards do not alter existing `Rating` data or revision triggers.
+
+ID domain memakai integer serial; pseudonym penelitian berbeda dari akun dan bisa ditautkan kembali melalui database terbatas. Timestamp database memakai PostgreSQL timestamp; Prisma `@updatedAt` mengisi update melalui client.
 
 ## Recommendation automation state (Phase D)
 
@@ -42,7 +58,9 @@ Session dan Account cascade saat User dihapus karena keduanya data autentikasi t
 - `DatasetExport` merupakan snapshot metadata immutable; `filePath` untuk storage privat, bukan URL publik.
 - `FoodImport` dan `RecommendationBatch` memiliki trigger larangan delete; perubahan lifecycle tetap melalui status. CSV staging disimpan di `FOODREC_STORAGE_DIR/food-imports`, snapshot rating di `rating-exports`, dan result CSV di `recommendation-imports`; file key/path tidak pernah dikirim ke client.
 - `Recommendation` rows tidak menggunakan cascade; batch/Food/User referensi tetap dibatasi FK `RESTRICT`.
-- Tidak ada cascade untuk data penelitian.
+- Tidak ada cascade untuk data penelitian. Withdrawal eksplisit menghapus `ResearchRating` dan `ResearchRatingChange`; consent/revocation, withdrawal, export metadata/membership, dan bukti audit dipertahankan.
+- Research CSV ada di `FOODREC_STORAGE_DIR/research-exports`; manifest menyimpan consent version, source status, retention, counts, dan checksum. File path/key tidak dikirim ke client.
+- Tanggal retensi/policy diwajibkan sebelum studi OPEN, tetapi tidak ada scheduled deletion. Owner harus review dan menjalankan disposal terkontrol; CLOSED/ARCHIVED immutable.
 
 ## Migrasi dan seed
 

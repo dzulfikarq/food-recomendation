@@ -142,4 +142,14 @@ Results persist as JSONB `RecommendationJobArtifact` with DB-enforced `verificat
 
 Phase B remains **Pending Validation** mathematically: 43-rating screenshot transcription matches 5/5 rows; train-264 Top-1 item IDs match 0/22. Original exports, full 264 workflow settings, and intermediate score/neighbor evidence remain unavailable.
 
+## Research data boundary
+
+Research uses separate Prisma models and `/api/research/*` endpoints. Better Auth remains the only authentication system; USER consent is recorded per study/version with a document copy. Rating writes lock the study row, verify current consent and explicit tried-food attestation, and update `ResearchRating` plus immutable change events in one transaction. No endpoint reads or writes the ordinary `Rating` table for this workflow.
+
+`/research` and `/research/rate` serve respondents; `/admin/research` uses ADMIN-only study, statistics, export, withdrawal, and revocation APIs. A partial unique index allows one OPEN study. Open-study edits that change material terms require a consent version not previously accepted by any participant. Retention date/policy must be complete before opening; no automated deletion job is enabled.
+
+Research CSV files are stored under private `FOODREC_STORAGE_DIR/research-exports`, not existing `rating-exports`. Export creation serializes on the study row and records participant membership, an immutable manifest, and SHA-256. Withdrawal also locks the study, revokes active consent, excludes the respondent from later exports, marks earlier snapshots `REVOCATION_REQUIRED`, and blocks downloads until explicit revocation review. Admin-only revoke removes the private file and records an immutable revocation statement; it cannot erase copies outside FoodRec.
+
+The export participant ID is pseudonymous and distinct from `User.id`, but the database retains the account link for consent/withdrawal. `ResearchRatingSource` records verified application path, not independent proof of respondent identity or food experience. No Research model relates to `DatasetExport`, `RecommendationBatch`, `RecommendationJob`, or published recommendations. Existing Altair/engine paths remain unchanged.
+
 Phase F QA ran Playwright against isolated `foodrec_e2e_test` and the actual local Python worker. The runner asserts an `_test` target before each Prisma/Next/Playwright child process, applies migrations/seeds without reset, and builds into a separate Next dist directory. PostgreSQL confirms worker `SUCCEEDED` with a stale `UNVERIFIED` artifact; no batch is created or published. Browser checks establish app-flow readiness only, not Altair parity or production readiness. See [`PHASE_F_VERIFICATION.md`](PHASE_F_VERIFICATION.md).

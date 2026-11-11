@@ -4,7 +4,7 @@
 
 Buka `/research` dan baca informasi studi serta dokumen persetujuan yang ditulis penanggung jawab penelitian. Halaman menampilkan tujuan, data yang dikumpulkan, cara penggunaan, kontak, tanggal, retensi, dan penarikan. Jangan melanjutkan jika informasi belum jelas; gunakan kontak yang tersedia.
 
-Partisipasi sukarela. Persetujuan tidak dicentang sebelumnya dan terpisah dari persetujuan akun FoodRec. Akun USER existing tidak otomatis terdaftar sebagai responden. FoodRec tidak menyatakan bahwa studi telah mendapat persetujuan etik atau memenuhi aturan hukum tertentu.
+Partisipasi sukarela. Persetujuan tidak dicentang sebelumnya dan terpisah dari persetujuan akun FoodRec. Akun USER existing tidak otomatis terdaftar sebagai responden. Jika belum punya akun, daftar dari halaman studi; setelah daftar atau login, kamu kembali ke halaman penelitian. Kamu tetap harus membaca dan menyetujui consent secara terpisah. FoodRec tidak menyatakan bahwa studi telah mendapat persetujuan etik atau memenuhi aturan hukum tertentu.
 
 ## Memberi rating
 

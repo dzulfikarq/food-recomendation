@@ -12,6 +12,7 @@
 | D — Durable rating revisions, scheduler, locked configuration, monitoring API | **Implemented; PostgreSQL integration tested; automatic processing/publication OFF** | Existing Python worker polls PostgreSQL-backed scheduler; dedupe/stale metadata present. DB constraints hold gate at `PENDING_VALIDATION`, and trigger rejects all automatic jobs. No second queue/worker/service. |
 | E — Admin/user UX and engine monitoring | **Implemented; lint/typecheck/build/unit/Python/PostgreSQL integration/browser E2E tested** | Dashboard shows actual dataset, job, worker and gate state. UI separates computation, `UNVERIFIED` artifact, and publication. Six-stage manual CSV workflow and USER journey verified in Chromium. Manual screen-reader/contrast review Pending Validation. |
 | F — Full QA and parity gate review | **QA complete; mathematical parity Pending Validation** | 4/4 Chromium journeys, 6/6 PostgreSQL suites, and real Python worker staging pass. Automatic processing/publication remain OFF. Original Altair exports/settings and separate approval still required; job success is not parity evidence. |
+| G — Algorithm parity and release blockers | **Parity BLOCKED; test isolation hardened; release not ready** | No proven Python–Altair root cause; per-user diagnostics and evidence gaps in [`RECOMMENDATION_ENGINE_VALIDATION.md`](RECOMMENDATION_ENGINE_VALIDATION.md). `fast-uri` pinned to 3.1.9; broader dev audit and DB-backed validation remain open. See [`PHASE_G_REPORT.md`](PHASE_G_REPORT.md). |
 
 | Fase | Cakupan | Status | Dependensi |
 | --- | --- | --- | --- |
@@ -32,7 +33,7 @@
 - Workflow ADMIN memiliki enam tahap: siapkan dataset, unduh CSV, jalankan Altair manual, impor hasil, validasi, dan publikasi; riwayat teknis tersedia terpisah.
 - Dashboard Admin menampilkan statistik/database engine aktual, heartbeat worker berbasis TTL, status job/artifact/published batch, gate terkunci, dan CTA kondisional. Monitoring memakai API existing dan tidak menyediakan gate toggle.
 - Riwayat tetap menjaga checksum, waktu, admin, parameter, preview, dan metadata penelitian. Batch kosong/invalid tidak diterbitkan; ambang peringatan cakupan hampir penuh 90% adalah heuristik sementara.
-- Lint, typecheck, build, Prisma validate, 15 npm unit tests, 24 Python tests, 6 PostgreSQL suites, and 4 Playwright journeys **pass**. Browser checked mobile/tablet/desktop overflow, form labels, focus visibility, USER/Admin workflows, and real worker staging. Manual screen-reader/contrast/usability review and research-data validation remain **Pending Validation**. Production audit retains one moderate `fast-uri` finding.
+- Lint, typecheck, build, Prisma validate, 15 npm unit tests, 24 Python tests, 6 PostgreSQL suites, and 4 Playwright journeys **passed in Phase F**. Phase G production audit is clean after the `fast-uri` 3.1.9 override; full audit retains 7 moderate development-tool findings through nested `minimatch`. Browser checked mobile/tablet/desktop overflow, form labels, focus visibility, USER/Admin workflows, and real worker staging. Manual screen-reader/contrast/usability review and research-data validation remain **Pending Validation**.
 
 ## Acceptance checks Fase 1–4 and V2 Phase D/E
 

@@ -21,6 +21,8 @@ app/
   api/admin/foods/       role-guarded Food CRUD/status/image/CSV routes
   api/admin/rating-datasets/ rating snapshot/create/download
   api/admin/recommendation-batches/ import, validate, list/detail and atomic publish
+  api/admin/recommendation-jobs/ explicit ADMIN-only staging enqueue
+  api/internal/recommendation-jobs/ secret-authenticated worker claim/snapshot/heartbeat/result/failure/status
   api/me/recommendations/ owner-only published results
   api/foods/             public catalog + USER rating API
   api/my-ratings/        owner-only rating history API
@@ -44,14 +46,16 @@ lib/
   prisma.ts              singleton Prisma Client
   validation/auth.ts     request schemas
 prisma/
-  schema.prisma          seven domain models + auth models
+  schema.prisma          domain/auth models + recommendation jobs/artifacts
   migrations/            additive PostgreSQL migrations
   food-catalog.ts        40 Food seed records
 scripts/
   test-integration.mjs   dedicated `_test` DB migration/seed/test runner
+  run-recommender-worker.ps1 Windows PowerShell local worker launcher
 services/recommender/
   pyproject.toml         Python project; no runtime dependencies
   src/engine/            pure Cosine, user k-NN, prediction, Top-N
+  src/worker.py          authenticated HTTP client, checksum, timeout and process isolation
   src/schemas.py         typed engine results and statuses
   tests/                 synthetic fixture and stdlib unit tests
 ```
@@ -82,7 +86,7 @@ Better Auth menyimpan credential hash di `Account.password`. Ini mengikuti skema
 - Rating write memakai row lock pada Food dan transaction untuk upsert Rating + mengisi `firstUsedAt` hanya sekali. Existing `@@unique([userId, foodId])` dan SQL CHECK tetap menjadi guard DB.
 - `/my-ratings` dan `/api/my-ratings` hanya mengembalikan rating milik USER aktif.
 - ADMIN snapshot memakai satu query terurut, membuat CSV `user_id,food_id,rating`, hash SHA-256 dan private file key. `DatasetExport` metadata immutable; download mengecek checksum dan hanya ADMIN. Snapshot saat ini dibuffer di memory; gunakan cursor streaming bila ukuran dataset tumbuh material.
-- Ekspor tidak memasukkan nama, email, password, atau data personal. Tidak ada UBCF/Cosine code di Next.js atau Altair API; pure Python core kini terpisah di `services/recommender` dan belum terhubung.
+- Ekspor tidak memasukkan nama, email, password, atau data personal. UBCF/Cosine stays in `services/recommender`; Next.js owns job DB and exposes only numeric snapshot data to the worker.
 
 ## Recommendation import and publication Fase 6–7
 
@@ -100,8 +104,27 @@ Better Auth menyimpan credential hash di `Account.password`. Ini mengikuti skema
 
 Initial migration memiliki FK restrictive untuk histori penelitian, check constraints skor/rank/count, trigger immutable `Food.foodCode`/`DatasetExport`, serta trigger perlindungan histori. Hanya record teknis Account/Session cascade ke User. Local Docker Compose memakai named volume `foodrec-postgres` dan tidak menghapus volume saat stop.
 
-## Recommendation boundary — V2 Phase A implemented; integration pending
+## Recommendation boundary — V2 Phase C implemented; validation gate closed
 
-Existing web path tetap memakai Altair CSV import, validation, and atomic publication. Pure Python UBCF core and Phase B screenshot-transcription comparisons live in `services/recommender`; no worker or website integration yet. 43-rating output matches; train-264 Top-1 mismatches. Altair parity **Pending Validation** because reference CSVs are screenshot transcriptions, 264 workflow configuration is unconfirmed, and scores/neighbors are unavailable. Automatic processing tetap **OFF**.
+Existing web path tetap memakai Altair CSV import, validation, and atomic publication. PostgreSQL `RecommendationJob` rows reference immutable `DatasetExport` snapshots; atomic claims use `FOR UPDATE SKIP LOCKED`, 60-second leases, heartbeat, 15-minute attempt timeout, three bounded attempts, and stale-lease recovery during subsequent claims. Retry failures back off 5/10 seconds. Job creation is explicit ADMIN-only and idempotent; no scheduler, rating trigger, or automatic enqueue exists.
 
-Next.js remains owner of authentication, authorization, PostgreSQL migrations, snapshots, validation, and publication. Python worker communication, durable jobs, and batch source metadata are deferred to later V2 phases; Python has no direct database ownership.
+Next.js owns PostgreSQL/Prisma, snapshot reads/checksum verification, lease enforcement, result validation, and artifact storage. Internal worker routes use `FOODREC_WORKER_SECRET` Bearer auth plus worker ID/lease token; snapshot and result bodies are bounded. Python uses stdlib HTTP, downloads only numeric user/food/rating CSV, verifies SHA-256, and calls existing engine. Worker never connects to PostgreSQL.
+
+| Endpoint | Purpose |
+| --- | --- |
+| `POST /api/admin/recommendation-jobs` | Explicit ADMIN enqueue from `datasetExportId`, `kNeighbors`, `topN`, and UUID `idempotencyKey`; active Food IDs are frozen into job parameters. Same key/same request returns existing job; different request returns 409. |
+| `POST /api/admin/recommendation-jobs/:id/cancel` | ADMIN can cancel pending/running jobs; terminal jobs cannot be changed. |
+| `POST /api/internal/recommendation-jobs/claim` | Secret-authenticated atomic claim; body contains worker ID and engine version, so incompatible workers do not lease jobs. Returns one lease or 204. |
+| `GET /api/internal/recommendation-jobs/:id/snapshot` | Lease owner downloads checksum-verified, bounded CSV snapshot. |
+| `POST /api/internal/recommendation-jobs/:id/heartbeat` | Lease owner extends 60-second lease, never beyond attempt timeout. |
+| `POST /api/internal/recommendation-jobs/:id/result` | Lease owner submits bounded ranked scores; server validates users, active/unrated candidates, rank sequence, score range, and snapshot checksum. |
+| `POST /api/internal/recommendation-jobs/:id/fail` | Lease owner reports allow-listed error code; server stores safe summary and retries or fails job. |
+| `GET /api/internal/recommendation-jobs/:id` | Lease owner reads lifecycle and artifact metadata; result body is not returned by status API. |
+
+Every internal call uses `Authorization: Bearer ...`; all per-job calls also send `X-FoodRec-Worker-Id` and `X-FoodRec-Lease-Token`. Secret is never returned to browser or logs. Network clients must use HTTPS except loopback. Request/result limits protect API memory; worker limits snapshot 20 MiB, result 2 MiB/10,000 rows.
+
+Each attempt has 15-minute timeout, 60-second renewable lease, and heartbeat. Failure retries max 3 attempts with 5-second then 10-second delay; third failure is terminal `FAILED`. Expired leases/timeouts are recovered atomically when next worker claims; no scheduler is required. Worker uses a separate spawned Python process per computation so timeout/lease loss can terminate CPU work. SIGINT/SIGTERM stops new claims and lets active work finish when possible.
+
+Results persist as JSONB `RecommendationJobArtifact` with DB-enforced `verificationStatus=UNVERIFIED`. `SUCCEEDED` means computation completed only. Artifacts have no relation to `RecommendationBatch`; they cannot enter manual publication path, replace active batch, or be published automatically. Existing manual Altair import/publish behavior remains unchanged. Auto-processing remains **OFF**.
+
+Phase B remains **Pending Validation** mathematically: 43-rating screenshot transcription matches 5/5 rows; train-264 Top-1 item IDs match 0/22. Original exports, full 264 workflow settings, and intermediate score/neighbor evidence remain unavailable.

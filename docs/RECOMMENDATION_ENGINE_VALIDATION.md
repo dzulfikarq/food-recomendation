@@ -2,7 +2,7 @@
 
 ## Status: Pending Validation
 
-Python core implements explicit UBCF baselines; it is not integrated with website or worker. Phase B package now provides one 43-rating workflow XML and two screenshot transcriptions, but no genuine Altair CSV exports or score/neighbor breakdown. The 43-rating input is a toy fixture. The 264-rating screenshot is only conditionally associated with that training set. Matching one transcribed ranking does not prove mathematical parity. Automatic processing remains **OFF**.
+Python core implements explicit UBCF baselines and Phase C worker runs it through authenticated staging jobs. It does not feed the website recommendation page or publication path. Phase B package provides one 43-rating workflow XML and two screenshot transcriptions, but no genuine Altair CSV exports or score/neighbor breakdown. The 43-rating input is a toy fixture. The 264-rating screenshot is only conditionally associated with that training set. Matching one transcribed ranking does not prove mathematical parity. Automatic processing remains **OFF**.
 
 ## Current baseline
 
@@ -14,7 +14,7 @@ Python core implements explicit UBCF baselines; it is not integrated with websit
 - Candidate eligibility: active food IDs supplied by snapshot caller, excluding every food target user rated in that snapshot.
 - Top-N: predicted rating descending, then food ID ascending. Candidate IDs are deduplicated before scoring.
 - Empty statuses: `COLD_START`, `NO_CANDIDATES`, `NO_NEIGHBORS`, `NO_PREDICTIONS`; successful result is `READY`.
-- Initial operational values suggested by product: `kNeighbors=3`, `topN=5`, poll interval 30 minutes, automatic processing OFF. These are not research findings. Engine functions require k and Top-N explicitly.
+- Initial operational values suggested by product: `kNeighbors=3`, `topN=5`; these are not research findings. Phase C queue worker polls every 2 seconds, but no automatic job enqueue/scheduler exists. Engine functions require k and Top-N explicitly.
 
 ## Phase A synthetic unit fixture
 

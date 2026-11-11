@@ -4,7 +4,7 @@ Status fitur menggunakan **Implemented** (kode tersedia), **Tested** (automated/
 
 ## 1. Product Overview
 
-FoodRec adalah aplikasi web untuk menjelajahi makanan, menyimpan preferensi pengguna, dan menyajikan rekomendasi yang telah diterbitkan. Website menyimpan akun, katalog, rating, snapshot, batch, dan riwayat audit. User-Based Collaborative Filtering dengan Cosine Similarity diproses manual oleh administrator di **Altair AI Studio Educational 2026.1.1**; website menukar dataset dan hasil lewat CSV. Python V2 core belum terhubung ke backend web.
+FoodRec adalah aplikasi web untuk menjelajahi makanan, menyimpan preferensi pengguna, dan menyajikan rekomendasi yang telah diterbitkan. Website menyimpan akun, katalog, rating, snapshot, batch, riwayat audit, antrean recommendation job durable, dan artifact staging yang belum terverifikasi. User-Based Collaborative Filtering dengan Cosine Similarity tetap diproses manual oleh administrator di **Altair AI Studio Educational 2026.1.1**; Phase C menambahkan job Python eksplisit untuk staging tanpa mengubah publikasi CSV manual.
 
 Implementasi mencakup foundation, autentikasi, Food Management, rating, snapshot CSV, validasi hasil Altair, manajemen batch, publikasi, dan halaman rekomendasi USER. Pemrosesan Altair tetap manual; kesesuaian dengan file penelitian asli dan review visual lintas perangkat masih perlu divalidasi.
 
@@ -14,11 +14,11 @@ Implementasi mencakup foundation, autentikasi, Food Management, rating, snapshot
 
 ## FoodRec V2 status
 
-Python UBCF core and Phase B regression fixtures exist in `services/recommender`; website still has no worker, queue, or internal API. Existing Altair CSV workflow remains active. The 43-row screenshot transcription is **MATCHED OUTPUT**; train-264 Top-1 is **MISMATCH**. Mathematical parity is **Pending Validation** because transcriptions are not original exports and full 264 operator settings/scores are unavailable. Automatic processing remains **OFF**. See [`RECOMMENDATION_ENGINE_VALIDATION.md`](RECOMMENDATION_ENGINE_VALIDATION.md).
+Phase C menambahkan antrean PostgreSQL, internal API dengan autentikasi service, dan worker Python. Job hanya dibuat eksplisit oleh ADMIN; hasil worker tetap artifact `UNVERIFIED` dan tidak membuat atau menerbitkan batch. Tidak ada pemrosesan otomatis dari rating atau scheduler. Phase B: transkripsi screenshot 43 rating **MATCHED OUTPUT**; Top-1 train-264 **MISMATCH**. Paritas matematis tetap **Pending Validation** karena file referensi bukan export asli dan konfigurasi/score workflow 264 belum tersedia. Pemrosesan otomatis tetap **OFF**. Lihat [`RECOMMENDATION_ENGINE_VALIDATION.md`](RECOMMENDATION_ENGINE_VALIDATION.md).
 
 ## 2. Problem Statement
 
-Pengguna membutuhkan cara menemukan makanan sesuai preferensi, sementara pola rating dapat memberi sinyal preferensi kolektif. FoodRec menyediakan katalog aktif dan rating eksplisit. Admin memproses dataset di Altair dan menerbitkan hasil; Next.js belum menjalankan CF atau memperbarui hasil otomatis. Python Phase A core belum terhubung.
+Pengguna membutuhkan cara menemukan makanan sesuai preferensi, sementara pola rating dapat memberi sinyal preferensi kolektif. FoodRec menyediakan katalog aktif dan rating eksplisit. Admin tetap dapat memproses dataset di Altair dan menerbitkan hasil; Phase C juga dapat menghitung hasil Python ke staging, namun tidak memublikasikannya.
 
 ## 3. Product Goals
 

@@ -6,9 +6,9 @@
 
 | Phase | Status | Notes |
 | --- | --- | --- |
-| A — Foundation and Python core | **Implemented; 14 unit tests pass; research fixture Pending Validation** | Pure functions, synthetic fixture, documented baseline. |
+| A — Foundation and Python core | **Implemented; 23 unit tests pass; research fixture Pending Validation** | Pure functions, synthetic fixture, documented baseline. |
 | B — Altair validation | **Output comparison complete; mathematical parity Pending Validation** | 43: MATCHED OUTPUT (5/5); train-264: MISMATCH (0/22 item IDs). Screenshot transcription and incomplete 264 workflow prevent parity claim. |
-| C — PostgreSQL jobs and authenticated worker API | Planned | No schema/API changes yet. |
+| C — PostgreSQL jobs and authenticated worker API | **Implemented; PostgreSQL integration tested** | Additive migration, atomic leased queue, secret-authenticated routes, isolated Python worker, `UNVERIFIED` artifacts only. Explicit enqueue; no auto-processing/publication. |
 | D — Rating-triggered and scheduled processing | Planned; automatic processing OFF | Must wait for validation and integration gates. |
 | E — Admin/user automation UX | Planned | Existing manual CSV workflow remains unchanged. |
 | F — Full verification | Planned | No end-to-end worker verification yet. |

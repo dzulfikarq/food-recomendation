@@ -34,19 +34,36 @@ class PhaseBRatingPredictionHoldoutTests(unittest.TestCase):
         absolute_errors = []
         squared_errors = []
         missing_predictions = 0
+        missing_no_neighbors = 0
+        missing_without_neighbor_rating = 0
+        per_user_coverage = {}
         for user_id, held_out_ratings in test.items():
             neighbors = select_neighbors(user_id, train, k_neighbors=3)
+            self.assertEqual(len(neighbors), 3)
+            covered_for_user = 0
             for food_id, actual_rating in held_out_ratings.items():
                 predicted_rating = predict_rating(food_id, neighbors, train)
                 if predicted_rating is None:
                     missing_predictions += 1
+                    if not neighbors:
+                        missing_no_neighbors += 1
+                    elif not any(food_id in train[neighbor.user_id] for neighbor in neighbors):
+                        missing_without_neighbor_rating += 1
                     continue
+                covered_for_user += 1
                 error = predicted_rating - actual_rating
                 absolute_errors.append(abs(error))
                 squared_errors.append(error * error)
+            per_user_coverage[user_id] = covered_for_user
 
         self.assertEqual(len(absolute_errors), 42)
         self.assertEqual(missing_predictions, 24)
+        self.assertEqual(missing_no_neighbors, 0)
+        self.assertEqual(missing_without_neighbor_rating, 24)
+        self.assertEqual(sum(count == 3 for count in per_user_coverage.values()), 6)
+        self.assertEqual(sum(count == 2 for count in per_user_coverage.values()), 8)
+        self.assertEqual(sum(count == 1 for count in per_user_coverage.values()), 8)
+        self.assertAlmostEqual(len(absolute_errors) / len(test_rows), 42 / 66)
         self.assertAlmostEqual(sum(absolute_errors) / len(absolute_errors), 0.5716092123274483)
         self.assertAlmostEqual(math.sqrt(sum(squared_errors) / len(squared_errors)), 1.0860034510806849)
 

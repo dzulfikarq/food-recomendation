@@ -6,6 +6,8 @@ Python core implements explicit UBCF baselines and Phase C worker runs it throug
 
 ## Current baseline
 
+This is an implementation baseline, **not an approved thesis methodology**. See [`RECOMMENDATION_METHODOLOGY_DECISION.md`](RECOMMENDATION_METHODOLOGY_DECISION.md) for the explicit-rating recommendation, binary alternative, evidence, and approvals still needed.
+
 - Algorithm: user-based k-nearest neighbors with cosine similarity.
 - Similarity strategy: `overlap` by default; vectors contain only foods both users rated. Optional `zero_filled` compares union of food IDs and treats missing ratings as zero.
 - Minimum common ratings: configurable; fixture uses 2. Value 1 is only a code-level baseline, not a research parameter.
@@ -132,7 +134,7 @@ All 22 screenshot-reference foods are valid unrated candidates in each user's tr
 
 ### Separate 264/66 rating-prediction holdout
 
-This check does **not** call Top-N. For each of 66 test pairs, it selects neighbors from train-only ratings (`k=3`) and calls `predict_rating`; all 66 train/test pairs are disjoint. Python baseline predicts 42/66; 24 have no selected neighbor who rated held-out food. On 42 covered predictions, MAE=`0.571609`, RMSE=`1.086003`. No Altair Rating Prediction output is supplied, so these metrics are Python-only and do not establish parity or full holdout coverage. Do not compute MAE/RMSE from Top-N ranks.
+This check does **not** call Top-N. For each of 66 test pairs, it selects neighbors from train-only ratings (`k=3`, minimum overlap 1) and calls `predict_rating`; all 66 train/test pairs are disjoint. All 22 users receive 3 neighbors. Python predicts 42/66 (coverage `63.64%`); 24 have no selected neighbor who rated held-out food. Per-user coverage: 6 users have 3/3, 8 have 2/3, and 8 have 1/3 predictions. On 42 covered predictions, MAE=`0.571609`, RMSE=`1.086003`. These are covered-case Python-only metrics, not whole-test error; source ratings/provenance are unverified, and no baseline comparison or uncertainty interval is reported. No Altair explicit Rating Prediction workflow/output is supplied. The repository guide's mention of that procedure is not executable workflow evidence. Therefore these metrics do not establish parity or full holdout coverage. Do not compute MAE/RMSE from Top-N ranks.
 
 ## Overall validation status
 

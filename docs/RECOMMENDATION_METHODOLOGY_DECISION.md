@@ -8,6 +8,8 @@ Versi ringkas yang ditujukan untuk tinjauan dosen pembimbing tersedia di [`RESEA
 
 Jangan menyamakan model ini dengan operator Altair Item Recommendation yang diaudit. Source publik mengindikasikan operator tersebut memakai implicit/binary interaction; binary diagnostic cocok pada set skor maksimum native, tetapi source belum dikaitkan dengan extension runtime. Mathematical parity tetap **PENDING VALIDATION**. Auto-processing dan automatic publication tetap **OFF**; artifact tetap **UNVERIFIED**.
 
+Provenance snapshot 879 mendapat audit lanjutan di [`DATASET_PROVENANCE.md`](DATASET_PROVENANCE.md); status kelayakan dataset perlu diselesaikan sebelum eksperimen skripsi.
+
 ## Audit PRD dan dokumen penelitian
 
 - [`PRD.md`](PRD.md) menetapkan UBCF/Cosine dan rating eksplisit 1–5, tetapi sebelumnya belum membedakan estimasi rating dari ranking Top-N dan belum menetapkan neighbor rule, formula prediksi, evaluasi, atau arti skala rating. Bagian metode sekarang merujuk proposal ini dan menandai persetujuan sebagai pending.

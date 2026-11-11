@@ -6,8 +6,7 @@ import { LogoutButton } from "@/components/site/logout-button";
 
 export async function PublicHeader() {
   const session = await getSession();
-  const ratingHref = session?.user.role === "USER" ? "/my-ratings" : "/login";
-  const showRatings = session?.user.role !== "ADMIN";
+  const showRatings = session?.user.role === "USER";
 
   return (
     <header className="sticky top-0 z-30 border-b border-border bg-white/95 backdrop-blur">
@@ -20,7 +19,7 @@ export async function PublicHeader() {
         <nav aria-label="Navigasi utama" className="hidden items-center gap-5 lg:flex">
           <Link href="/" className="inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold text-gray-900 hover:bg-gray-50"><House size={16} aria-hidden="true" /> Beranda</Link>
           <Link href="/foods" className="inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50"><UtensilsCrossed size={16} aria-hidden="true" /> Jelajahi makanan</Link>
-          {showRatings && <Link href={ratingHref} className="inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50"><Star size={16} aria-hidden="true" /> Rating saya</Link>}
+          {showRatings && <Link href="/my-ratings" className="inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50"><Star size={16} aria-hidden="true" /> Rating saya</Link>}
           <Link href="/recommendations" className="inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50"><Sparkles size={16} aria-hidden="true" /> Rekomendasi</Link>
         </nav>
 
@@ -42,8 +41,9 @@ export async function PublicHeader() {
       <nav aria-label="Navigasi cepat" className="flex gap-2 overflow-x-auto border-t border-border px-5 py-2 lg:hidden">
         <Link href="/" className="shrink-0 rounded-lg bg-soft px-3 py-1.5 text-xs font-semibold text-orange-900">Beranda</Link>
         <Link href="/foods" className="shrink-0 rounded-lg px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50">Jelajahi makanan</Link>
-        {showRatings && <Link href={ratingHref} className="shrink-0 rounded-lg px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50">Rating saya</Link>}
+        {showRatings && <Link href="/my-ratings" className="shrink-0 rounded-lg px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50">Rating saya</Link>}
         <Link href="/recommendations" className="shrink-0 rounded-lg px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50">Rekomendasi</Link>
+        {!session && <Link href="/login" className="shrink-0 rounded-lg px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50">Masuk</Link>}
       </nav>
     </header>
   );

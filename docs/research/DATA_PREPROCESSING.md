@@ -8,6 +8,7 @@ Use `RAW_interactions.csv` and `RAW_recipes.csv` from one verified release. The 
 
 - Requires source columns `user_id,recipe_id,date,rating` and recipe column `id`.
 - Requires canonical positive decimal source IDs, strict `YYYY-MM-DD` dates, and integer ratings 0–5. Rejects malformed/missing required values, duplicate recipe IDs, and interactions pointing to absent recipes. It does not silently coerce or drop malformed rows.
+- Counts empty/missing cells and affected rows by column across both raw files. Missing required values fail preprocessing; missing optional review/recipe metadata is reported, not imputed.
 - Computes SHA-256 for both source files; records their names, hashes, row counts, release label, rights-review reference, and generated-artifact hashes/counts in `manifest.json`.
 - Ignores rating-zero rows as non-ratings. For duplicate explicit `(user_id,recipe_id)` pairs, retains latest date; same-date ties retain last source row. Counts removed duplicate explicit rows. Zero rows are discarded before duplicate resolution, so zero cannot erase a valid explicit rating.
 - Does not use review text, recipe descriptions, or other metadata as model features.

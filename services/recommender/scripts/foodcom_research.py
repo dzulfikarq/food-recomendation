@@ -48,12 +48,22 @@ def _source_key(value: str) -> tuple[int, str]:
 def _read_csv(path: Path, required: Iterable[str]):
     source = path.open("r", encoding="utf-8-sig", newline="")
     reader = csv.DictReader(source)
+    if reader.fieldnames and len(reader.fieldnames) != len(set(reader.fieldnames)):
+        source.close()
+        raise ValueError(f"{path.name}: duplicate column names")
     fields = set(reader.fieldnames or ())
     missing = set(required) - fields
     if missing:
         source.close()
         raise ValueError(f"{path.name}: missing columns {', '.join(sorted(missing))}")
     return source, reader
+
+
+def _record_missing(row: dict, cell_counts: Counter, row_counts: Counter) -> None:
+    for field, value in row.items():
+        if field is not None and (value is None or not value.strip()):
+            cell_counts[field] += 1
+            row_counts[field] += 1
 
 
 def _source_id(value: str | None, field: str, row_number: int, row_type: str) -> str:
@@ -117,10 +127,14 @@ def prepare_dataset(
     recipe_ids: set[str] = set()
     recipe_count = 0
     source, reader = _read_csv(recipes_path, ("id",))
+    recipe_headers = tuple(reader.fieldnames or ())
+    recipe_missing_cells = Counter(dict.fromkeys(recipe_headers, 0))
+    recipe_missing_rows = Counter(dict.fromkeys(recipe_headers, 0))
     with source:
         for row_number, row in enumerate(reader, start=2):
             if None in row:
                 raise ValueError(f"recipe row {row_number}: malformed CSV row")
+            _record_missing(row, recipe_missing_cells, recipe_missing_rows)
             recipe_id = _source_id(row.get("id"), "recipe id", row_number, "recipe")
             if recipe_id in recipe_ids:
                 raise ValueError(f"recipe row {row_number}: duplicate recipe id {recipe_id}")
@@ -146,11 +160,15 @@ def prepare_dataset(
                 )"""
             )
             source, reader = _read_csv(interactions_path, ("user_id", "recipe_id", "date", "rating"))
+            interaction_headers = tuple(reader.fieldnames or ())
+            interaction_missing_cells = Counter(dict.fromkeys(interaction_headers, 0))
+            interaction_missing_rows = Counter(dict.fromkeys(interaction_headers, 0))
             with source:
                 for raw_rows, row in enumerate(reader, start=1):
                     row_number = raw_rows + 1
                     if None in row:
                         raise ValueError(f"interaction row {row_number}: malformed CSV row")
+                    _record_missing(row, interaction_missing_cells, interaction_missing_rows)
                     user_id = _source_id(row.get("user_id"), "user id", row_number, "interaction")
                     item_id = _source_id(row.get("recipe_id"), "recipe id", row_number, "interaction")
                     if item_id not in recipe_ids:
@@ -313,6 +331,10 @@ def prepare_dataset(
                         "RAW_interactions.csv": {"name": interactions_path.name, "sha256": interaction_hash, "source_rows": raw_rows},
                         "RAW_recipes.csv": {"name": recipes_path.name, "sha256": recipe_hash, "source_rows": recipe_count},
                     },
+                    "columns": {
+                        "RAW_interactions.csv": interaction_headers,
+                        "RAW_recipes.csv": recipe_headers,
+                    },
                 },
                 "runtime": {
                     "python_version": platform.python_version(),
@@ -337,6 +359,16 @@ def prepare_dataset(
                 },
                 "audit": {
                     "raw_interaction_rows": raw_rows,
+                    "missing_values": {
+                        "RAW_interactions.csv": {
+                            "cells_by_column": dict(sorted(interaction_missing_cells.items())),
+                            "rows_by_column": dict(sorted(interaction_missing_rows.items())),
+                        },
+                        "RAW_recipes.csv": {
+                            "cells_by_column": dict(sorted(recipe_missing_cells.items())),
+                            "rows_by_column": dict(sorted(recipe_missing_rows.items())),
+                        },
+                    },
                     "rating_zero_rows_excluded": zero_ratings,
                     "duplicate_explicit_rows_removed": duplicate_rows,
                     "full_explicit_data": _density_stats(full_users, full_items, full_pairs, full_rating_counts),

@@ -20,8 +20,8 @@ class FoodComResearchPipelineTests(unittest.TestCase):
         self.recipes = self.root / "RAW_recipes.csv"
         with self.recipes.open("w", encoding="utf-8", newline="") as file:
             writer = csv.writer(file)
-            writer.writerow(("name", "id"))
-            writer.writerows((f"recipe {item}", item) for item in range(101, 107))
+            writer.writerow(("name", "id", "description"))
+            writer.writerows((f"recipe {item}", item, "" if item == 106 else "details") for item in range(101, 107))
         with self.interactions.open("w", encoding="utf-8", newline="") as file:
             writer = csv.writer(file)
             writer.writerow(("user_id", "recipe_id", "date", "rating", "review"))
@@ -61,6 +61,7 @@ class FoodComResearchPipelineTests(unittest.TestCase):
         self.assertEqual(manifest["audit"]["duplicate_explicit_rows_removed"], 1)
         self.assertEqual(manifest["audit"]["full_explicit_data"]["explicit_rating_pairs"], 48)
         self.assertEqual(manifest["audit"]["subset"]["explicit_rating_pairs"], 48)
+        self.assertEqual(manifest["audit"]["missing_values"]["RAW_recipes.csv"]["cells_by_column"]["description"], 1)
         self.assertEqual(manifest["audit"]["split_rows"]["train"] + manifest["audit"]["split_rows"]["validation"] + manifest["audit"]["split_rows"]["test"], 48)
         self.assertTrue(all(len(details["sha256"]) == 64 for details in manifest["artifacts"].values()))
         self.assertEqual(hashlib.sha256((first / "canonical.csv").read_bytes()).hexdigest(), manifest["artifacts"]["canonical.csv"]["sha256"])

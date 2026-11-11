@@ -15,17 +15,17 @@ Use `RAW_interactions.csv` and `RAW_recipes.csv` from one verified release. The 
 
 ## Subset and ID mapping
 
-Candidate users require at least three unique explicit ratings, allowing at least one row in each split. Select up to `--user-limit` users by ascending SHA-256 rank of `(seed, source user ID)`, independent of rating values. This intentionally targets active users; eligibility uses full interaction counts before splitting and may bias results toward more active users. Items are all recipes rated by selected users; there is no item-based test-score filtering.
+Select up to `--user-limit` users by ascending SHA-256 rank of source user ID among users with at least one explicit rating; do not filter the sample by full-history interaction count or rating value. Items are all recipes rated by selected users; there is no item-based test-score filtering. Users with fewer than three explicit pairs stay in training only because they cannot contribute one pair to each partition. Thus validation/test metrics cover sampled users with enough history, but test interactions do not determine which users enter the subset.
 
 Canonical user/item IDs are dense positive integers assigned in ascending source-ID order. `user_id_map.csv` and `item_id_map.csv` preserve exact Food.com IDs. `canonical.csv` has only `user_id,item_id,rating`; canonical rating values remain 1–5. These IDs are research-local and never map to production `Food.id`.
 
 ## Split, leakage, and reproducibility
 
-For each selected user, SHA-256 ranks their source recipe IDs using the recorded seed. Assign approximately 80% to train, 10% to validation, remainder to test, guaranteeing at least one row in each split. Split pair sets are disjoint. The `evaluate` command rechecks split checksums, rating schema, and pair leakage before scoring.
+For each sampled user with at least three pairs, SHA-256 ranks source recipe IDs using the recorded seed. Assign approximately 80% to train, 10% to validation, remainder to test, guaranteeing at least one row in each split. Users with one or two pairs are assigned entirely to train. Split pair sets are disjoint. The `evaluate` command rechecks split checksums, rating schema, training-user presence, and pair leakage before scoring.
 
 Manifest records seed, eligibility/subset rule, split rule, source checksums, source row counts, rating-zero count, duplicate count, full-data and subset user/item/pair/rating counts, density/sparsity, split row counts, output SHA-256 values, Python/SQLite versions, and pipeline SHA-256. The deterministic hash ranking avoids dependence on Python's `random` implementation version. Identical source files, arguments, pipeline, and runtime produce byte-identical artifacts and manifest.
 
-`canonical.csv` contains selected subset only. Full-source aggregate counts in the manifest are computed after explicit-rating deduplication if and only if `prepare` successfully processes the actual files. No full-source stats are currently available.
+`canonical.csv` contains selected subset only. Full-source aggregate counts and per-column missing-value counts are computed after explicit-rating deduplication if and only if `prepare` successfully processes the actual files. Actual local exploratory counts are documented in [`EXPERIMENT_RESULTS.md`](EXPERIMENT_RESULTS.md); the manifest remains the machine-readable record.
 
 ## Checks and execution
 

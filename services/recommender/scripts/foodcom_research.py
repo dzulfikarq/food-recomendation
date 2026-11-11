@@ -205,14 +205,14 @@ def prepare_dataset(
             full_rating_counts = Counter(dict(connection.execute(
                 "SELECT rating, COUNT(*) FROM interactions GROUP BY rating"
             ).fetchall()))
-            eligible = connection.execute(
-                "SELECT user_id, COUNT(*) FROM interactions GROUP BY user_id HAVING COUNT(*) >= 3"
-            ).fetchall()
+            source_users = [row[0] for row in connection.execute(
+                "SELECT DISTINCT user_id FROM interactions"
+            )]
             selected_sources = [
                 source_user
                 for source_user, _ in sorted(
-                    eligible,
-                    key=lambda row: (_rank(seed, "user-sample", row[0]), _source_key(row[0])),
+                    ((source_user, _rank(seed, "user-sample", source_user)) for source_user in source_users),
+                    key=lambda row: (row[1], _source_key(row[0])),
                 )[:user_limit]
             ]
             if not selected_sources:
@@ -250,6 +250,7 @@ def prepare_dataset(
 
             rating_counts: Counter = Counter()
             split_counts: Counter = Counter()
+            split_users: dict[str, set[int]] = {name: set() for name in ("train", "validation", "test")}
             split_rows = 0
             with ExitStack() as stack:
                 canonical_writer = csv.writer(stack.enter_context(
@@ -270,22 +271,28 @@ def prepare_dataset(
                 def flush_user(source_user: str, rows: list[tuple[int, int, int, str]]) -> None:
                     nonlocal split_rows
                     count = len(rows)
-                    train_count = max(1, count * 8 // 10)
-                    validation_count = max(1, count // 10)
-                    if count - train_count - validation_count < 1:
-                        train_count -= 1
-                    ranked = sorted(rows, key=lambda row: (_rank(seed, "split", source_user, row[3]), row[1]))
-                    assignment = {}
-                    for index, row in enumerate(ranked):
-                        assignment[row[1]] = (
-                            "train" if index < train_count else
-                            "validation" if index < train_count + validation_count else "test"
-                        )
+                    if count < 3:
+                        assignment = {row[1]: "train" for row in rows}
+                    else:
+                        train_count = max(1, count * 8 // 10)
+                        validation_count = max(1, count // 10)
+                        if count - train_count - validation_count < 1:
+                            train_count -= 1
+                        ranked = sorted(rows, key=lambda row: (_rank(seed, "split", source_user, row[3]), row[1]))
+                        assignment = {
+                            row[1]: (
+                                "train" if index < train_count else
+                                "validation" if index < train_count + validation_count else "test"
+                            )
+                            for index, row in enumerate(ranked)
+                        }
                     for canonical_user, canonical_item, rating, _ in rows:
                         record = (canonical_user, canonical_item, rating)
+                        split = assignment[canonical_item]
                         canonical_writer.writerow(record)
-                        split_writers[assignment[canonical_item]].writerow(record)
-                        split_counts[assignment[canonical_item]] += 1
+                        split_writers[split].writerow(record)
+                        split_counts[split] += 1
+                        split_users[split].add(canonical_user)
                         rating_counts[rating] += 1
                         split_rows += 1
 
@@ -348,11 +355,11 @@ def prepare_dataset(
                     "subset_policy": {
                         "seed": seed,
                         "user_limit": user_limit,
-                        "selection": "SHA-256 rank of source user ID; eligibility requires at least three deduplicated explicit ratings.",
-                        "bias": "Selects active users; item coverage follows selected users. Eligibility uses interaction counts before split, not rating values or model outcomes.",
+                        "selection": "SHA-256 rank over source user IDs with at least one explicit rating; no activity-count eligibility filter.",
+                        "bias": "Item coverage follows selected users. Users with fewer than three pairs remain train-only; validation/test estimates cover users with enough history for all splits.",
                     },
                     "split_policy": {
-                        "algorithm": "Per user, SHA-256 rank of source user/recipe IDs; at least one train, validation, and test row per selected user.",
+                        "algorithm": "Per user, SHA-256 rank of source user/recipe IDs; users with fewer than three pairs are train-only, others have at least one row in each split.",
                         "target_fractions": {"train": 0.8, "validation": 0.1, "test": 0.1},
                         "seed": seed,
                     },
@@ -374,6 +381,7 @@ def prepare_dataset(
                     "full_explicit_data": _density_stats(full_users, full_items, full_pairs, full_rating_counts),
                     "subset": _density_stats(subset_users, subset_items, split_rows, rating_counts),
                     "split_rows": dict(split_counts),
+                    "split_users": {split: len(users) for split, users in split_users.items()},
                 },
                 "artifacts": artifacts,
             }

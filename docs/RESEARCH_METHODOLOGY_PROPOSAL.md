@@ -10,7 +10,7 @@ Penelitian menguji apakah rating makanan dari pengguna lain yang memiliki pola p
 
 **Alasan memilih explicit rating:** rating 1–5 diminta sebagai penilaian preferensi. Nilai 1 dan 5 membawa makna berbeda; metode harus mempertahankan perbedaan itu dan dapat diuji terhadap rating aktual pada data yang ditahan. Binary interaction hanya mencatat apakah suatu pasangan user–makanan pernah muncul. Jika semua baris rating dianggap interaksi positif, rating 1 diperlakukan sama dengan rating 5. Itu masuk akal untuk tujuan “pernah berinteraksi”, bukan otomatis untuk tujuan “makanan yang disukai”.
 
-Dataset sekunder Food.com sedang diaudit sebagai jalur eksperimen terpisah; bukan pengganti diam-diam untuk data katalog FoodRec. Full RAW files belum diperoleh dan izin penggunaan belum dipastikan, sehingga belum ada statistik full dataset, split, atau hasil Food.com. Lihat [`PUBLIC_DATASET_SOURCE.md`](research/PUBLIC_DATASET_SOURCE.md), [`DATA_PREPROCESSING.md`](research/DATA_PREPROCESSING.md), dan [`EXPERIMENT_PROTOCOL.md`](research/EXPERIMENT_PROTOCOL.md). Nilai `rating=0` pada sampel sumber ditandai “I will not rate”; pipeline mengecualikannya, tidak menyamakannya dengan rating 1.
+Dataset sekunder Food.com telah diperiksa dan dijalankan secara lokal sebagai eksperimen eksploratif terpisah; bukan pengganti diam-diam untuk data katalog FoodRec. Izin penggunaan belum terverifikasi dan hasil belum disetujui sebagai hasil skripsi. Ringkasan angka aktual dan batasannya ada di [`EXPERIMENT_RESULTS.md`](research/EXPERIMENT_RESULTS.md); provenance dan lisensi di [`PUBLIC_DATASET_SOURCE.md`](research/PUBLIC_DATASET_SOURCE.md). Nilai `rating=0` pada sampel sumber ditandai “I will not rate”; preprocessing mengecualikannya, tidak menyamakannya dengan rating 1.
 
 Audit source publik Recommender Extension menunjukkan `Weighted Knn=false` memakai binary cosine dan skor proporsi tetangga yang berinteraksi; nilai rating tidak dibaca. Diagnostic binary menempatkan 22/22 item Altair di set skor maksimum, tetapi hanya 5 maksimum yang unik dan 17 terikat. Ini mendukung perbedaan semantik, bukan bukti parity: source belum dikaitkan ke build Altair runtime. Detail source dan tie ada di [`ALTAIR_PYTHON_PARITY_INVESTIGATION.md`](ALTAIR_PYTHON_PARITY_INVESTIGATION.md). Repository juga belum memiliki workflow/output Altair explicit-rating yang terverifikasi; ini tidak membuktikan operator tersebut tidak tersedia di instalasi Altair.
 
@@ -89,7 +89,7 @@ Sebelum Bab III menyebut 879 rating sebagai data penelitian, minta sumber primer
 
 ## Rancangan eksperimen yang diusulkan
 
-Tidak ada optimasi final dijalankan dalam pekerjaan ini. Konfigurasi berikut adalah rancangan untuk disetujui, bukan hasil eksperimen.
+Run Food.com lokal pada 5.000 user adalah **eksploratif**, bukan optimasi final atau hasil terkonfirmasi; lihat laporan hasil. Konfigurasi metodologi berikut tetap rancangan untuk disetujui, bukan parameter final.
 
 ### Tahap A — verifikasi dan kunci data
 

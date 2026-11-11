@@ -129,6 +129,27 @@ class FoodComResearchPipelineTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "missing from RAW_recipes.csv"):
             prepare_dataset(unknown, self.recipes, self.root / "unknown-out", source_version="v1", seed=1, user_limit=1, rights_review="review")
 
+    def test_low_activity_sampled_user_is_kept_in_train_without_holdout(self):
+        with self.interactions.open("a", encoding="utf-8", newline="") as file:
+            csv.writer(file).writerow((99, 101, "2021-01-01", 4, "one rating"))
+        data = prepare_dataset(
+            self.interactions, self.recipes, self.root / "low-activity",
+            source_version="test-release", seed=20261112,
+            user_limit=9, rights_review="test fixture only",
+        )
+        with (data / "user_id_map.csv").open(encoding="utf-8", newline="") as file:
+            mapping = {row["foodcom_user_id"]: row["user_id"] for row in csv.DictReader(file)}
+        user_id = mapping["99"]
+        split_users = {}
+        for split in ("train", "validation", "test"):
+            with (data / f"{split}.csv").open(encoding="utf-8", newline="") as file:
+                split_users[split] = {row["user_id"] for row in csv.DictReader(file)}
+        self.assertIn(user_id, split_users["train"])
+        self.assertNotIn(user_id, split_users["validation"])
+        self.assertNotIn(user_id, split_users["test"])
+        manifest = json.loads((data / "manifest.json").read_text(encoding="utf-8"))
+        self.assertEqual(manifest["audit"]["split_users"], {"train": 9, "validation": 8, "test": 8})
+
     def test_modified_split_fails_checksum_before_evaluation(self):
         data = self._prepare("dataset")
         with (data / "test.csv").open("a", encoding="utf-8") as file:

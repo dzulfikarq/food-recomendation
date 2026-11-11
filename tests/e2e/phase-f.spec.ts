@@ -4,6 +4,7 @@ import { mkdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { expect, test, type Page } from "@playwright/test";
+import AxeBuilder from "@axe-core/playwright";
 import pg from "pg";
 
 test.describe.configure({ mode: "serial" });
@@ -39,6 +40,18 @@ async function query<T extends pg.QueryResultRow = pg.QueryResultRow>(sql: strin
 async function expectNoHorizontalOverflow(page: Page) {
   const width = await page.evaluate(() => ({ viewport: document.documentElement.clientWidth, content: document.documentElement.scrollWidth }));
   expect(width.content, `document overflow: ${width.content}px > ${width.viewport}px`).toBeLessThanOrEqual(width.viewport + 1);
+}
+
+async function expectAccessible(page: Page) {
+  const results = await new AxeBuilder({ page })
+    .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"])
+    .analyze();
+  expect(results.violations.map(({ id, impact, description, nodes }) => ({
+    id,
+    impact,
+    description,
+    elements: nodes.map(({ target, failureSummary }) => ({ target, failureSummary }))
+  }))).toEqual([]);
 }
 
 async function expectLabeledFormControls(page: Page) {
@@ -101,6 +114,7 @@ test("Guest registration, protected access, responsive navigation, and USER rati
   await expect(page.getByRole("heading", { name: "Masuk ke FoodRec" })).toBeVisible();
   await page.goto("/register");
   await expectLabeledFormControls(page);
+  await expectAccessible(page);
 
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/");
@@ -373,6 +387,7 @@ test("Admin Altair workflow, security gates, and real Python worker-to-PostgreSQ
   await expect(jobRow.getByText("Tidak diterbitkan otomatis", { exact: true })).toBeVisible();
 
   await page.getByRole("button", { name: "Keluar" }).click();
+  await expect(page).toHaveURL("/");
   await login(page, userAEmail, userAPassword);
   await page.goto("/recommendations");
   await expect(page.getByRole("heading", { name: "Rekomendasi Untukmu" })).toBeVisible();
@@ -387,7 +402,12 @@ test("Research consent, mobile rating, admin export checksum, and study closure"
   await page.goto("/admin/research");
   await expect(page.getByRole("heading", { name: "Pengumpulan Data Penelitian" })).toBeVisible();
   await expectNoHorizontalOverflow(page);
+  await expectAccessible(page);
   await page.screenshot({ path: path.join(screenshotDir, "research-admin-desktop.png"), fullPage: true });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expectNoHorizontalOverflow(page);
+  await expectAccessible(page);
+  await page.setViewportSize({ width: 1440, height: 960 });
   await page.getByRole("button", { name: "Buat penelitian" }).click();
   const title = `Studi browser ${runId.slice(0, 8)}`;
   const start = new Date(Date.now() - 60 * 60_000);
@@ -423,8 +443,10 @@ test("Research consent, mobile rating, admin export checksum, and study closure"
   await expect(page.getByRole("heading", { name: title })).toBeVisible();
   await expect(page.getByText("Kontak Uji (research@example.test)")).toBeVisible();
   await expectNoHorizontalOverflow(page);
+  await expectAccessible(page);
   await page.getByRole("link", { name: "Buat akun" }).click();
   await expect(page).toHaveURL(/\/register\?callbackURL=%2Fresearch$/);
+  await expectAccessible(page);
   await page.getByLabel("Nama lengkap").fill("QA Responden Penelitian");
   await page.getByLabel("Email", { exact: true }).fill(userCEmail);
   await page.getByLabel("Password", { exact: true }).fill(userCPassword);
@@ -443,6 +465,7 @@ test("Research consent, mobile rating, admin export checksum, and study closure"
   await page.getByRole("link", { name: "Masuk", exact: true }).last().click();
   await expect(page).toHaveURL(/\/login\?callbackURL=%2Fresearch$/);
   await expectNoHorizontalOverflow(page);
+  await expectAccessible(page);
   await page.getByLabel("Email").fill(userCEmail);
   await page.getByLabel("Password").fill(userCPassword);
   await page.getByRole("button", { name: "Masuk", exact: true }).click();
@@ -450,11 +473,13 @@ test("Research consent, mobile rating, admin export checksum, and study closure"
   await page.setViewportSize({ width: 1440, height: 960 });
   await expect(page.getByRole("heading", { name: title })).toBeVisible();
   const consent = page.getByLabel(/Saya telah membaca dokumen persetujuan versi/);
+  await expectAccessible(page);
   await expect(consent).not.toBeChecked();
   await consent.check();
   await page.getByRole("button", { name: "Setuju dan lanjutkan" }).click();
   await expect(page).toHaveURL(/\/research\/rate$/);
   await expectNoHorizontalOverflow(page);
+  await expectAccessible(page);
   await page.getByLabel("Cari makanan").fill("Nasi Goreng");
   const group = page.getByRole("radiogroup", { name: "Rating Nasi Goreng" });
   await group.getByRole("radio", { name: "4 dari 5, suka" }).check({ force: true });
@@ -480,6 +505,8 @@ test("Research consent, mobile rating, admin export checksum, and study closure"
   await expect(resumedNasiCard.getByLabel("Saya pernah mencoba makanan ini.")).toBeChecked();
 
   await page.setViewportSize({ width: 390, height: 844 });
+  await expectNoHorizontalOverflow(page);
+  await expectAccessible(page);
   await page.getByLabel("Cari makanan").fill("Mie Goreng");
   const skippedMobileGroup = page.getByRole("radiogroup", { name: "Rating Mie Goreng" });
   await skippedMobileGroup.getByRole("radio", { name: "2 dari 5, kurang suka" }).check({ force: true });
@@ -532,6 +559,7 @@ test("Research consent, mobile rating, admin export checksum, and study closure"
   await page.getByRole("button", { name: "Tarik partisipasi penelitian" }).click();
   await expect(page.getByText(/penarikan sedang diproses/)).toBeVisible();
   await expectNoHorizontalOverflow(page);
+  await expectAccessible(page);
   await page.screenshot({ path: path.join(screenshotDir, "research-withdrawal-mobile.png"), fullPage: true });
 
   await page.getByRole("button", { name: "Keluar" }).click();

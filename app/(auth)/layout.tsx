@@ -23,7 +23,7 @@ export default function AuthLayout({ children }: { children: ReactNode }) {
           <Link href="/" className="inline-flex items-center gap-2 rounded-lg px-2 py-2 text-sm font-semibold text-gray-500 hover:bg-gray-50 hover:text-gray-900"><ArrowLeft size={16} aria-hidden="true" /> Beranda</Link>
         </div>
         <div className="mx-auto flex w-full max-w-md flex-1 flex-col justify-center py-10">{children}</div>
-        <p className="m-0 pb-2 text-center text-xs text-gray-400">Akun FoodRec dilindungi dengan autentikasi berbasis sesi.</p>
+        <p className="m-0 pb-2 text-center text-xs text-gray-600">Akun FoodRec dilindungi dengan autentikasi berbasis sesi.</p>
       </section>
     </main>
   );

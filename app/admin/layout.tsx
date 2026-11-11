@@ -12,7 +12,7 @@ export default async function AdminLayout({ children }: { children: ReactNode })
       <aside className="hidden w-72 shrink-0 flex-col border-r border-border bg-white md:flex">
         <Link href="/" className="flex h-[76px] items-center gap-2.5 border-b border-border px-7 text-lg font-extrabold tracking-tight text-gray-950"><span className="grid size-10 place-items-center rounded-xl bg-primary text-white"><UtensilsCrossed size={20} aria-hidden="true" /></span>Food<span className="-ml-2 text-primary">Rec</span></Link>
         <div className="px-4 py-5">
-          <p className="px-3 text-[10px] font-bold uppercase tracking-[.18em] text-gray-400">WORKSPACE</p>
+          <p className="px-3 text-[10px] font-bold uppercase tracking-[.18em] text-gray-600">WORKSPACE</p>
           <AdminNavigation />
         </div>
         <div className="mt-auto border-t border-border p-4">

@@ -103,8 +103,8 @@ export function ResearchRatingExperience({ studyId, foods: initialFoods, canRate
 
     <div className="mb-4 grid gap-3 rounded-2xl border border-border bg-white p-4 sm:grid-cols-[1fr_14rem_12rem]">
       <div className="space-y-1.5"><label htmlFor="research-search" className="block text-sm font-semibold text-gray-800">Cari makanan</label><input id="research-search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Nama atau kategori" className="min-h-11 w-full rounded-xl border border-border px-3 text-sm outline-none focus:border-primary focus:ring-4 focus:ring-orange-100" /></div>
-      <SelectField label="Kategori" value={category} onChange={(event) => setCategory(event.target.value)}><option value="">Semua kategori</option>{categories.map((item) => <option key={item}>{item}</option>)}</SelectField>
-      <SelectField label="Status rating" value={ratingStatus} onChange={(event) => setRatingStatus(event.target.value)}><option value="all">Semua makanan</option><option value="unrated">Belum dinilai</option><option value="rated">Sudah dinilai</option></SelectField>
+      <SelectField id="research-category" label="Kategori" value={category} onChange={(event) => setCategory(event.target.value)}><option value="">Semua kategori</option>{categories.map((item) => <option key={item}>{item}</option>)}</SelectField>
+      <SelectField id="research-rating-status" label="Status rating" value={ratingStatus} onChange={(event) => setRatingStatus(event.target.value)}><option value="all">Semua makanan</option><option value="unrated">Belum dinilai</option><option value="rated">Sudah dinilai</option></SelectField>
     </div>
 
     {filteredFoods.length ? <div className="grid gap-4 md:grid-cols-2">{filteredFoods.map((food) => {

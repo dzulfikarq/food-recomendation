@@ -62,7 +62,7 @@ export function InputField({
         name={name}
         aria-invalid={Boolean(error)}
         aria-describedby={error || hint ? helpId : undefined}
-        className="min-h-12 w-full rounded-xl border border-border bg-white px-3.5 text-sm text-gray-900 outline-none transition placeholder:text-gray-400 focus:border-primary focus:ring-4 focus:ring-orange-100 aria-invalid:border-red-400 aria-invalid:focus:ring-red-100"
+        className="min-h-12 w-full rounded-xl border border-border bg-white px-3.5 text-sm text-gray-900 outline-none transition placeholder:text-gray-600 focus:border-primary focus:ring-4 focus:ring-orange-100 aria-invalid:border-red-400 aria-invalid:focus:ring-red-100"
       />
       {(error || hint) && <p id={helpId} className={`text-xs ${error ? "text-red-700" : "text-secondary"}`} role={error ? "alert" : undefined}>{error ?? hint}</p>}
     </div>
@@ -108,7 +108,7 @@ export function TextAreaField({
         {...props}
         id={fieldId}
         name={name}
-        className="min-h-28 w-full resize-y rounded-xl border border-border bg-white px-3.5 py-3 text-sm text-gray-900 outline-none transition placeholder:text-gray-400 focus:border-primary focus:ring-4 focus:ring-orange-100"
+        className="min-h-28 w-full resize-y rounded-xl border border-border bg-white px-3.5 py-3 text-sm text-gray-900 outline-none transition placeholder:text-gray-600 focus:border-primary focus:ring-4 focus:ring-orange-100"
       />
     </div>
   );

@@ -25,7 +25,7 @@ Beranda menampilkan sapaan, jumlah rating tersimpan, langkah berikutnya, tautan 
 
 ### ADMIN
 
-Dashboard → siapkan snapshot → proses manual di Altair → impor dan validasi CSV → tinjau preview/warning → konfirmasi publikasi → tinjau riwayat.
+Dashboard operasional dan monitoring → siapkan dataset → unduh CSV → jalankan Altair manual → impor hasil → validasi → konfirmasi publikasi → tinjau riwayat.
 
 FoodRec tidak menghitung UBCF/Cosine Similarity, tidak terhubung otomatis ke Altair, dan tidak mengubah batch saat rating disimpan.
 
@@ -39,10 +39,10 @@ FoodRec tidak menghitung UBCF/Cosine Similarity, tidak terhubung otomatis ke Alt
 | `/foods/[id]` | Foto/placeholder, nama, kategori, deskripsi, asal/rasa, serta kontrol rating. |
 | `/my-ratings` | Ringkasan jumlah dan rata-rata rating, navigasi kembali ke katalog, serta riwayat akun aktif. Rating makanan aktif dapat diubah; makanan nonaktif tetap terlihat sebagai riwayat. |
 | `/recommendations` | Judul “Rekomendasi Untukmu”, penjelasan pola rating, tanggal pembaruan, kartu berperingkat dan tautan detail. Empty state dibedakan berdasarkan status backend. |
-| `/admin` | Statistik aktual: makanan aktif, pengguna pemberi rating, total rating, jumlah snapshot, batch aktif, dan waktu publikasi terakhir. CTA berikutnya mengikuti kondisi data. |
+| `/admin` | Statistik aktual: makanan aktif, pengguna pemberi rating, total rating, dataset, batch aktif, dan publikasi terakhir. Monitoring menampilkan revision dataset, gate, job terbaru, heartbeat worker, serta langkah berikutnya kondisional. |
 | `/admin/foods` | Katalog dengan pencarian/filter server-side, pagination, status, CRUD, dan empty state berbeda untuk katalog kosong vs filter tanpa hasil. |
 | `/admin/ratings` | Jumlah rating, pembuatan snapshot, pencarian ID/nama file, riwayat snapshot berpaginasi, checksum, unduhan terproteksi, loading dan empty state. |
-| `/admin/recommendations` | Empat tahap terpandu dan status stepper berbasis snapshot/batch. Dataset, panduan Altair, impor, validasi, dan konfirmasi publikasi tampil berurutan; filter/pencarian riwayat ada di detail audit. |
+| `/admin/recommendations` | Overview engine dan job monitoring terpisah dari enam tahap workflow manual. Dataset, unduhan CSV, panduan Altair, impor, validasi, dan publikasi tampil berurutan; filter/pencarian riwayat ada di detail audit. |
 
 ## Status rekomendasi USER
 
@@ -59,12 +59,14 @@ Semantics status backend tidak berubah.
 
 ## Tahap workflow ADMIN
 
-1. **Siapkan Dataset** — lihat pengguna pemberi rating, makanan aktif, jumlah rating/snapshot, buat snapshot, pilih snapshot tersimpan, dan unduh CSV privat. Peringatan cakupan tinggi memakai heuristik 90% yang dijelaskan pada UI; snapshot/audit tidak ditimpa.
-2. **Proses di Altair** — ikuti langkah impor, UBCF, Cosine Similarity, dan user k-NN secara manual. Penjelasan pemula dan kontrak CSV ada di bagian teknis; k/Top-N harus dicatat sesuai eksperimen. FoodRec tidak membuat integrasi Altair.
-3. **Impor dan Validasi** — pilih dataset sumber, pilih file CSV, lihat nama/ukuran, isi parameter tanpa default penelitian, lalu tinjau jumlah valid/invalid, peringatan stale, error, dan preview user/makanan.
-4. **Tinjau dan Publikasikan** — periksa dataset, waktu impor FoodRec, parameter, warning, dan hasil. Batch kosong/invalid tidak bisa diterbitkan; server melakukan validasi ulang dan publikasi atomik. Riwayat punya filter status, pencarian batch/nama file, pagination, checksum, admin, waktu, dan detail.
+1. **Siapkan Dataset** — lihat ringkasan rating/katalog, buat snapshot immutable, dan pilih sumber data.
+2. **Unduh CSV** — unduh snapshot privat yang akan dipakai, agar input Altair dan hasil impor merujuk dataset yang sama.
+3. **Jalankan Altair** — ikuti panduan manual UBCF, Cosine Similarity, dan user k-NN. FoodRec tidak menjalankan atau mengonfirmasi proses Altair; k/Top-N harus dicatat sesuai eksperimen.
+4. **Impor Hasil** — pilih snapshot sumber dan unggah CSV. Masukkan parameter yang benar-benar dipakai; tidak ada nilai default yang diklaim sebagai hasil penelitian.
+5. **Validasi** — tinjau referensi, rank, warning stale, error, dan preview. Validasi struktur FoodRec bukan bukti kesesuaian matematis dengan Altair.
+6. **Publikasikan** — tinjau batch valid dan tidak kosong, lalu konfirmasi publikasi manual. Server memvalidasi ulang dan menerbitkan secara atomik; riwayat/checksum tetap tersedia.
 
-Stepper menunjukkan tahap saat ini/selesai berdasarkan snapshot dan batch tersimpan. Navigasi tahap memakai anchor pada halaman yang sama; refresh membangun ulang status dari database, sedangkan unggahan file tetap pada kontrol browser sampai dikirim.
+Stepper menunjukkan tahap saat ini/selesai berdasarkan snapshot dan batch tersimpan. Monitoring memakai API Admin yang ada dan membedakan job dihitung, artifact `UNVERIFIED`, validasi, serta batch published. Worker online hanya jika heartbeat aktual berumur kurang dari 90 detik. Tak ada kontrol UI untuk membuka gate atau mengaktifkan pemrosesan/publikasi otomatis. Navigasi tahap memakai anchor; refresh membangun ulang status dari database.
 
 Kecocokan format dengan ekspor penelitian Altair yang sebenarnya tetap **Pending Validation** sampai file tersebut diuji. Panduan tidak menyatakan workflow berhasil dengan data penelitian asli.
 
@@ -78,13 +80,14 @@ Kecocokan format dengan ekspor penelitian Altair yang sebenarnya tetap **Pending
 - `RecommendationImportForm` — input dataset/CSV/k/Top-N dan feedback impor.
 - `RecommendationValidationReportView` — ringkasan, stale warnings, error per baris, dan preview.
 - `PublishRecommendationBatch` — konfirmasi publikasi custom dan feedback transaksi.
+- `EngineMonitoring` — ringkasan engine/job, heartbeat, safe error summary, revision dan artifact status melalui endpoint Admin terlindungi.
 - `FoodGridSkeleton` — state loading katalog dan riwayat rating.
 
 ## Sistem visual dan aksesibilitas
 
 - Primary `#F97316`; hover `#EA580C`; latar cream `#FFF7ED`; kartu putih; border neutral; teks utama gelap.
 - Plus Jakarta Sans, ikon Lucide, sudut kartu 16px, tombol dengan target sentuh minimal 40–44px.
-- Mobile-first; filter dan kartu menumpuk pada layar sempit, tabel audit memiliki scroll horizontal.
+- Mobile-first; filter dan kartu menumpuk pada layar sempit, tabel monitoring/audit memiliki scroll horizontal.
 - Form memakai label, status/error yang diumumkan screen reader, fokus terlihat, dan status tombol pending.
 - Rating memakai input radio native agar mendukung Tab dan tombol panah; teks skala tidak bergantung pada warna atau ikon.
 - Ikuti preferensi reduced motion yang telah diterapkan stylesheet.

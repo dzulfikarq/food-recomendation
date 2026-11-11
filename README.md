@@ -4,12 +4,13 @@ FoodRec membantu pengguna menjelajahi makanan, menyimpan rating, dan melihat rek
 
 ## Status
 
-- **Implemented:** user journey personal, katalog/rating, halaman rekomendasi, dashboard admin operasional, dan workflow CSV terpandu sampai publikasi.
-- **FoodRec V2 Phase D:** durable PostgreSQL rating revisions, revision-consistent snapshots, worker-polled scheduler, locked engine config, dedupe, stale-result metadata, and admin monitoring API. Reuses Phase C queue/worker.
+- **Implemented:** user journey personal, katalog/rating, published-only recommendation page, dashboard Admin, engine monitoring, dan workflow CSV enam tahap sampai publikasi.
+- **FoodRec V2 Phase D/E:** durable PostgreSQL rating revisions, locked scheduler/config, safe job monitoring UI, dan enam tahap Altair manual. Reuses Phase C queue/worker and existing monitoring API.
 - **Validation gate:** DB constraints force auto-processing/publication OFF and `PENDING_VALIDATION`; DB trigger rejects automatic jobs. Worker artifacts stay `UNVERIFIED`; `SUCCEEDED` means compute finished only. No automatic batch creation/publication or active-batch replacement.
 - **Automatic processing:** OFF. Mathematical parity **Pending Validation**; 43-rating output **MATCHED OUTPUT**, train-264 Top-1 **MISMATCH**. Screenshot transcription is not original Altair export.
-- **Admin workflow:** statistik dari database, empat tahap Dataset → Altair manual → Import/Validasi → Publish, snapshot pilihan, filter/pencarian riwayat, detail checksum dan metadata.
-- **Automated checks:** Python suite (24 tests), `npm test` (14 tests), lint, typecheck, build, and PostgreSQL integration suite (6 tests) run on isolated `foodrec_test`.
+- **Admin monitoring:** actual dataset revision, job status/detail, worker heartbeat TTL, last successful computation, last published batch, and locked validation gate. Computed, verified, and published outcomes remain distinct.
+- **Admin workflow:** statistik database dan enam tahap Siapkan Dataset → Unduh CSV → Jalankan Altair manual → Impor Hasil → Validasi → Publikasikan; filter/pencarian riwayat dan checksum dipertahankan.
+- **Automated checks:** Python suite (24 tests), `npm test` (14 tests), lint, typecheck, build, and six PostgreSQL integration suites pass on isolated `foodrec_test`. Browser E2E not run; manual visual/accessibility review pending.
 - **Pending Validation:** round-trip dengan file hasil Altair penelitian sesungguhnya, production database/storage, security/performance production, serta review visual, keyboard, dan screen reader lintas perangkat.
 - **Manual research workflow:** UBCF, Cosine Similarity, dan user k-NN tetap dapat dijalankan di Altair AI Studio Educational 2026.1.1; existing CSV validation/publication tetap berlaku.
 
@@ -52,10 +53,11 @@ Buka `http://localhost:3000`. `db:seed` membuat ADMIN hanya bila email belum ada
 
 ## Workflow rekomendasi
 
-1. ADMIN membuat dan mengunduh snapshot privat di `/admin/ratings` atau `/admin/recommendations`.
-2. ADMIN mengikuti panduan Altair manual (UBCF, Cosine Similarity, user k-NN), lalu mengekspor CSV ber-header `user_id,item_id,rank`. `item_id` harus memakai `Food.id`; website tidak menjalankan Altair.
-3. Di `/admin/recommendations`, pilih DatasetExport sumber, isi k/Top-N yang benar-benar dipakai, pilih CSV, tinjau nama/ukuran file, error/warning/preview, lalu konfirmasi **Terbitkan Rekomendasi**. Upload tidak otomatis aktif; batch kosong/invalid tidak dapat diterbitkan.
-4. USER melihat hasil batch PUBLISHED miliknya di `/recommendations`. Food nonaktif dan rekomendasi yang sudah dinilai disembunyikan. Perubahan rating tidak menghitung ulang algoritme dan tidak menjamin rekomendasi baru.
+1. ADMIN siapkan snapshot privat, lalu unduh CSV yang dipilih.
+2. ADMIN menjalankan UBCF/Cosine/user k-NN secara manual di Altair; website tidak menjalankan proses tersebut.
+3. ADMIN impor file ber-header `user_id,item_id,rank`, isi k/Top-N yang benar-benar dipakai, lalu tinjau validasi dan preview. `item_id` harus memakai `Food.id`.
+4. ADMIN menerbitkan batch valid/nonkosong secara manual. Import, job worker, dan komputasi tidak otomatis menerbitkan rekomendasi.
+5. USER melihat hasil batch PUBLISHED miliknya di `/recommendations`. Food nonaktif dan rekomendasi yang sudah dinilai disembunyikan. Perubahan rating tidak menghitung ulang algoritme dan tidak menjamin rekomendasi baru.
 
 ### Phase C/D worker (staging only; automation locked)
 

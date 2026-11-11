@@ -43,7 +43,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     }, { isolationLevel: "Serializable" });
     if ("error" in result) return apiError(result.error === "EXPORT_NOT_FOUND" ? 404 : 409, result.error === "EXPORT_NOT_FOUND" ? result.error : "EXPORT_NOT_AFFECTED", "Status ekspor berubah; periksa dashboard dan ulangi bila perlu.");
     return Response.json({ data: result, message: "Revokasi tercatat; unduhan diblokir dan file privat server dihapus." }, { headers: { "Cache-Control": "no-store" } });
-  } catch {
+  } catch (error) {
+    console.error(JSON.stringify({ event: "research_export_revocation_failed", errorType: error instanceof Error ? error.name : "UnknownError" }));
     return apiError(409, "EXPORT_REVOCATION_FAILED", "Revokasi belum selesai. Ekspor tetap diblokir; coba proses lagi.");
   }
 }

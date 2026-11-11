@@ -166,6 +166,17 @@ test("research consent, isolated rating, export snapshot, and withdrawal lifecyc
     assert.match(manifest.data.sourceStatus, /not independently verified/);
     assert.equal("filePath" in manifest.data, false);
     assert.equal(createHash("sha256").update(csv).digest("hex"), exportOne.fileChecksum);
+    assert.match(exportDownload.headers.get("cache-control") ?? "", /private, no-store/);
+    assert.match(manifestResponse.headers.get("cache-control") ?? "", /private, no-store/);
+    assert.equal((await api(`/api/admin/research/exports/${exportOne.id}/download`)).status, 401);
+    assert.equal((await api(`/api/admin/research/exports/${exportOne.id}/manifest`, "GET", undefined, cookies[0])).status, 403);
+    assert.equal((await api(`/api/admin/research/studies/${studyId}/exports`, "POST", undefined, cookies[0])).status, 403);
+    const crossOriginConsent = await fetch(`${baseUrl}/api/research/consent`, {
+      method: "POST",
+      headers: { origin: "https://untrusted.example", "content-type": "application/json", cookie: cookies[2] },
+      body: JSON.stringify({ studyId, version: "v2", accepted: true })
+    });
+    assert.equal(crossOriginConsent.status, 403);
 
     const appRatingsDuring = await prisma.rating.count();
     const revisionDuring = (await prisma.ratingDatasetState.findUniqueOrThrow({ where: { id: 1 } })).currentRevision;

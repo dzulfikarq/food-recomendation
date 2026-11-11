@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import { ArrowRight, Activity, Database, UtensilsCrossed } from "lucide-react";
 import { Badge, Card, PageHeader } from "@/components/ui";
+import { EngineMonitoring } from "@/components/admin/recommendations/engine-monitoring";
 import { requireAdmin } from "@/lib/authz";
 import { prisma } from "@/lib/prisma";
 
@@ -36,13 +37,13 @@ export default async function AdminDashboard() {
     : ratingCount === 0
       ? { title: "Ajak pengguna memberi rating", description: "Belum ada rating tersimpan. Pengguna USER perlu menilai makanan yang mereka kenal sebelum dataset dapat dibuat.", href: "/foods", label: "Lihat katalog publik", icon: UtensilsCrossed }
       : latestBatch?.status === "VALIDATED" && latestBatch._count.recommendations > 0
-        ? { title: "Tinjau hasil yang tervalidasi", description: "Periksa preview dan konfirmasi publikasi. Rekomendasi baru tampil setelah diterbitkan.", href: `/admin/recommendations/${latestBatch.id}`, label: "Tinjau dan publikasikan", icon: Activity }
-        : latestBatch?.status === "DRAFT"
-          ? { title: "Perbaiki file hasil", description: "Batch terakhir memiliki kesalahan validasi. Perbaiki CSV lalu impor ulang; batch invalid tidak dapat diterbitkan.", href: "/admin/recommendations#step-3", label: "Kembali ke validasi", icon: Activity }
+        ? { title: "Tinjau hasil yang tervalidasi", description: "Periksa preview dan konfirmasi publikasi. Rekomendasi baru tampil setelah diterbitkan.", href: "/admin/recommendations#step-6", label: "Tinjau dan publikasikan", icon: Activity }
+      : latestBatch?.status === "DRAFT"
+          ? { title: "Perbaiki file hasil", description: "Batch terakhir memiliki kesalahan validasi. Perbaiki CSV lalu impor ulang; batch invalid tidak dapat diterbitkan.", href: "/admin/recommendations#step-4", label: "Perbaiki dan impor ulang", icon: Activity }
           : !latestSnapshot || snapshotStale
             ? { title: snapshotStale ? "Buat snapshot rating terbaru" : "Buat snapshot pertama", description: snapshotStale ? "Rating berubah setelah snapshot terakhir. Snapshot baru akan menjaga data proses tetap mutakhir." : "Rating sudah tersedia. Buat snapshot privat untuk memulai workflow rekomendasi.", href: "/admin/recommendations#step-1", label: "Buat dataset", icon: Database }
             : latestBatch && latestBatch.datasetExportId !== latestSnapshot.id
-              ? { title: "Proses dataset di Altair", description: "Snapshot tersedia, tetapi website belum menerima CSV hasil. Jalankan proses manual di Altair, lalu kembali untuk mengunggah hasil.", href: "/admin/recommendations#step-2", label: "Lanjut ke panduan Altair", icon: Activity }
+              ? { title: "Proses dataset di Altair", description: "Snapshot tersedia, tetapi website belum menerima CSV hasil. Unduh CSV, jalankan proses manual di Altair, lalu kembali untuk mengunggah hasil.", href: "/admin/recommendations#step-3", label: "Lanjut ke panduan Altair", icon: Activity }
               : activeBatch
                 ? { title: "Tinjau rekomendasi aktif", description: "Batch aktif sudah diterbitkan. Periksa detail atau mulai snapshot baru saat data rating berubah.", href: "/admin/recommendations", label: "Tinjau workflow", icon: Activity }
                 : { title: "Lanjutkan workflow rekomendasi", description: "Belum ada hasil aktif. Ikuti tahap snapshot, proses manual di Altair, validasi, lalu publikasi.", href: "/admin/recommendations", label: "Buka workflow", icon: Activity };
@@ -58,6 +59,8 @@ export default async function AdminDashboard() {
       <SummaryCard icon={Activity} label="Batch aktif" value={activeBatch ? <Badge className="bg-green-50 text-green-800">Diterbitkan</Badge> : "Belum ada"} detail={activeBatch ? `Batch #${activeBatch.id}` : "Batch baru tampil setelah publikasi"} />
       <SummaryCard icon={Database} label="Publikasi terakhir" value={latestPublishedBatch?.publishedAt ? formatDate(latestPublishedBatch.publishedAt) : "Belum ada"} detail={latestPublishedBatch ? `Batch #${latestPublishedBatch.id}` : "Belum ada batch diterbitkan"} />
     </section>
+
+    <EngineMonitoring mode="summary" />
 
     <section aria-labelledby="last-batch-title" className="mt-6">
       <Card className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6">

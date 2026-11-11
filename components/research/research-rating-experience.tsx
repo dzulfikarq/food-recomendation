@@ -8,7 +8,7 @@ import { Star } from "lucide-react";
 import { Alert, Button, Card, SelectField } from "@/components/ui";
 
 const labels = ["Tidak suka", "Kurang suka", "Biasa saja", "Suka", "Sangat suka"];
-type Food = { id: number; name: string; category: string; description: string | null; imageUrl: string | null; rating: number | null };
+type Food = { id: number; name: string; category: string | null; description: string | null; imageUrl: string | null; rating: number | null };
 
 export function ResearchRatingExperience({ studyId, foods: initialFoods, canRate, completed }: {
   studyId: number;
@@ -29,9 +29,9 @@ export function ResearchRatingExperience({ studyId, foods: initialFoods, canRate
   const [success, setSuccess] = useState<Record<number, string>>({});
   const [pageError, setPageError] = useState<string | null>(null);
 
-  const categories = useMemo(() => [...new Set(foods.map((food) => food.category))].sort((a, b) => a.localeCompare(b, "id")), [foods]);
+  const categories = useMemo(() => [...new Set(foods.flatMap((food) => food.category ? [food.category] : []))].sort((a, b) => a.localeCompare(b, "id")), [foods]);
   const filteredFoods = useMemo(() => foods.filter((food) => {
-    const matchesSearch = `${food.name} ${food.category}`.toLocaleLowerCase("id").includes(search.trim().toLocaleLowerCase("id"));
+    const matchesSearch = `${food.name} ${food.category ?? ""}`.toLocaleLowerCase("id").includes(search.trim().toLocaleLowerCase("id"));
     const matchesCategory = !category || food.category === category;
     const hasRating = food.rating !== null;
     const matchesStatus = ratingStatus === "all" || (ratingStatus === "rated" ? hasRating : !hasRating);

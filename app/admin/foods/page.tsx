@@ -80,7 +80,7 @@ export default async function FoodManagementPage({ searchParams }: { searchParam
                       <td className="px-5 py-3"><div className="grid size-12 place-items-center overflow-hidden rounded-xl border border-border bg-soft">{food.imageUrl ? <img src={food.imageUrl} alt={food.name} className="size-full object-cover" /> : <ImageIcon size={19} className="text-orange-400" aria-hidden="true" />}</div></td>
                       <td className="px-4 py-3"><code className="rounded-md bg-gray-100 px-2 py-1 text-xs font-semibold text-gray-700">{food.foodCode}</code></td>
                       <td className="max-w-64 px-4 py-3"><p className="m-0 truncate font-semibold text-gray-900">{food.name}</p><p className="m-0 mt-1 truncate text-xs text-secondary">{food.origin}</p></td>
-                      <td className="px-4 py-3 text-gray-700">{food.category}</td>
+                      <td className="px-4 py-3 text-gray-700">{food.category ?? "—"}</td>
                       <td className="px-4 py-3"><Badge className={food.isActive ? "bg-green-50 text-green-800" : "bg-gray-100 text-gray-600"}>{food.isActive ? "Aktif" : "Nonaktif"}</Badge></td>
                       <td className="px-4 py-3 text-xs text-secondary">{new Intl.DateTimeFormat("id-ID", { dateStyle: "medium" }).format(food.createdAt)}</td>
                       <td className="px-4 py-3 text-right"><FoodRowActions id={food.id} name={food.name} isActive={food.isActive} hasHistory={hasHistory} /></td>

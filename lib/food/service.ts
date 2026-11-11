@@ -49,6 +49,7 @@ export async function listPublicFoods(query: PublicFoodQuery, userId?: number | 
     ];
   }
   if (query.category) where.category = query.category;
+  if (query.tag) where.tags = { array_contains: [query.tag] };
   if (userId && query.ratingStatus === "rated") where.ratings = { some: { userId } };
   if (userId && query.ratingStatus === "unrated") where.ratings = { none: { userId } };
 
@@ -61,13 +62,19 @@ export async function listPublicFoods(query: PublicFoodQuery, userId?: number | 
       select: {
         id: true, foodCode: true, name: true, description: true, category: true, taste: true,
         healthLevel: true, origin: true, proteinType: true, priceCategory: true, mealTime: true,
-        dietCategory: true, texture: true, imageUrl: true
+        dietCategory: true, texture: true, imageUrl: true, minutes: true, tags: true
       }
     }),
     prisma.food.count({ where })
   ]);
 
-  return { foods, pagination: { page: query.page, pageSize: query.pageSize, total, totalPages: Math.max(1, Math.ceil(total / query.pageSize)) } };
+  return {
+    foods: foods.map((food) => ({
+      ...food,
+      tags: Array.isArray(food.tags) ? food.tags.filter((tag): tag is string => typeof tag === "string") : []
+    })),
+    pagination: { page: query.page, pageSize: query.pageSize, total, totalPages: Math.max(1, Math.ceil(total / query.pageSize)) }
+  };
 }
 
 export const defaultFoodPageSize = FOOD_PAGE_SIZE;

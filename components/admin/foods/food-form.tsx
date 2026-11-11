@@ -11,10 +11,10 @@ export type FoodFormRecord = {
   foodCode: string;
   name: string;
   description: string | null;
-  category: string;
-  taste: string;
+  category: string | null;
+  taste: string | null;
   healthLevel: string | null;
-  origin: string;
+  origin: string | null;
   proteinType: string | null;
   priceCategory: string | null;
   mealTime: string | null;
@@ -110,15 +110,15 @@ export function FoodForm({ mode, food }: Props) {
             hint={mode === "edit" ? "Food Code permanen dan tidak dapat diubah." : "Gunakan kode unik, misalnya FOOD-041."}
           />
           <InputField id="food-name" name="name" label="Nama Makanan" defaultValue={food?.name} placeholder="Nama makanan" maxLength={180} required />
-          <SelectField id="food-category" name="category" label="Kategori" defaultValue={food?.category ?? ""} required>
+          <SelectField id="food-category" name="category" label="Kategori" defaultValue={food?.category ?? ""} required={mode === "create"}>
             <option value="" disabled>Pilih kategori</option>
             {FOOD_CATEGORIES.map((value) => <option key={value} value={value}>{value}</option>)}
           </SelectField>
-          <SelectField id="food-taste" name="taste" label="Taste / Rasa" defaultValue={food?.taste ?? ""} required>
+          <SelectField id="food-taste" name="taste" label="Taste / Rasa" defaultValue={food?.taste ?? ""} required={mode === "create"}>
             <option value="" disabled>Pilih karakter rasa</option>
             {FOOD_TASTES.map((value) => <option key={value} value={value}>{value}</option>)}
           </SelectField>
-          <InputField id="food-origin" name="origin" label="Origin / Asal" defaultValue={food?.origin} placeholder="Contoh: Jawa Barat" maxLength={100} required />
+          <InputField id="food-origin" name="origin" label="Origin / Asal" defaultValue={food?.origin ?? ""} placeholder="Contoh: Jawa Barat" maxLength={100} required={mode === "create"} />
           <TextAreaField id="food-description" name="description" label="Deskripsi" defaultValue={food?.description ?? ""} maxLength={2000} placeholder="Deskripsi singkat (opsional)" className="sm:col-span-2" />
         </div>
       </Card>

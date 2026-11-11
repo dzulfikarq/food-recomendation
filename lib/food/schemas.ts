@@ -34,7 +34,11 @@ export const foodCreateSchema = z.object({
   texture: optionalEnum(FOOD_TEXTURES)
 });
 
-export const foodUpdateSchema = foodCreateSchema.omit({ foodCode: true }).partial().refine(
+export const foodUpdateSchema = foodCreateSchema.omit({ foodCode: true }).extend({
+  category: optionalEnum(FOOD_CATEGORIES),
+  taste: optionalEnum(FOOD_TASTES),
+  origin: optionalText(100)
+}).partial().refine(
   (data) => Object.keys(data).length > 0,
   "Setidaknya satu field harus diubah."
 );
@@ -55,6 +59,7 @@ export const ratingInputSchema = z.object({ rating: z.number().int().min(1).max(
 export const publicFoodQuerySchema = z.object({
   search: z.string().trim().max(120).default(""),
   category: z.preprocess((value) => value === "" ? undefined : value, z.enum(FOOD_CATEGORIES).optional()),
+  tag: z.preprocess((value) => typeof value === "string" && value.trim() === "" ? undefined : value, z.string().trim().max(80).optional()),
   ratingStatus: z.enum(["all", "unrated", "rated"]).default("all"),
   sort: z.enum(["newest", "oldest", "name-asc", "name-desc"]).default("newest"),
   page: z.coerce.number().int().positive().default(1),

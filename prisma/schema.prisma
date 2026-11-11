@@ -142,30 +142,81 @@ model Verification {
 }
 
 model Food {
-  id           Int      @id @default(autoincrement())
-  foodCode     String   @unique @db.VarChar(64)
-  name         String   @db.VarChar(180)
-  description  String?  @db.Text
-  category     String   @db.VarChar(100)
-  taste        String   @db.VarChar(100)
-  healthLevel  String?  @db.VarChar(80)
-  origin       String   @db.VarChar(100)
-  proteinType  String?  @db.VarChar(100)
-  priceCategory String? @db.VarChar(80)
-  mealTime     String?  @db.VarChar(80)
-  dietCategory String?  @db.VarChar(100)
-  texture      String?  @db.VarChar(100)
-  imageUrl     String?  @db.Text
-  isActive     Boolean  @default(true)
-  firstUsedAt  DateTime?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-  ratings      Rating[]
-  recommendations Recommendation[]
-  researchRatings ResearchRating[]
+  id                    Int      @id @default(autoincrement())
+  foodCode              String   @unique @db.VarChar(64)
+  name                  String   @db.Text
+  description           String?  @db.Text
+  category              String?  @db.VarChar(100)
+  taste                 String?  @db.VarChar(100)
+  healthLevel           String?  @db.VarChar(80)
+  origin                String?  @db.VarChar(100)
+  proteinType           String?  @db.VarChar(100)
+  priceCategory         String?  @db.VarChar(80)
+  mealTime              String?  @db.VarChar(80)
+  dietCategory          String?  @db.VarChar(100)
+  texture               String?  @db.VarChar(100)
+  imageUrl              String?  @db.Text
+  sourceDataset         String   @default("FOODREC_MANUAL") @db.VarChar(40)
+  sourceId              String?  @db.VarChar(64)
+  sourceVersion         String?  @db.VarChar(80)
+  sourceImportId        Int?
+  minutes               Int?
+  submittedAt           DateTime? @db.Date
+  nSteps                Int?
+  nIngredients          Int?
+  tags                  Json?    @db.JsonB
+  nutrition             Json?    @db.JsonB
+  steps                 Json?    @db.JsonB
+  ingredients           Json?    @db.JsonB
+  isActive              Boolean  @default(true)
+  firstUsedAt           DateTime?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+  ratings               Rating[]
+  recommendations       Recommendation[]
+  researchRatings       ResearchRating[]
   researchRatingChanges ResearchRatingChange[]
+  historicalRatings     HistoricalRating[]
+  sourceImport          FoodCatalogImport? @relation(fields: [sourceImportId], references: [id], onDelete: Restrict)
 
+  @@unique([sourceDataset, sourceId])
   @@index([isActive, category])
+  @@index([sourceDataset, isActive])
+}
+
+model FoodCatalogImport {
+  id                     Int      @id @default(autoincrement())
+  sourceDataset          String   @default("FOODCOM") @db.VarChar(40)
+  sourceVersion          String   @db.VarChar(80)
+  sourceUrl              String?  @db.Text
+  rightsReviewReference  String?  @db.VarChar(160)
+  preparedManifestSha256 String?  @db.VarChar(64)
+  manifestSha256         String   @unique @db.VarChar(64)
+  samplingStrategy       String   @db.VarChar(40)
+  seed                   Int
+  userCount              Int
+  recipeCount            Int
+  ratingCount            Int
+  isActive               Boolean  @default(false)
+  createdAt              DateTime @default(now())
+  foods                  Food[]
+  ratings                HistoricalRating[]
+
+  @@index([sourceDataset, isActive])
+}
+
+model HistoricalRating {
+  importId      Int
+  sourceUserId  BigInt
+  foodId        Int
+  rating        Int
+  createdAt     DateTime @default(now())
+  catalogImport FoodCatalogImport @relation(fields: [importId], references: [id], onDelete: Restrict)
+  food          Food @relation(fields: [foodId], references: [id], onDelete: Restrict)
+
+  @@id([importId, sourceUserId, foodId])
+  @@index([importId, sourceUserId])
+  @@index([foodId])
 }
 
 model Rating {

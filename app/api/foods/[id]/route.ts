@@ -10,7 +10,9 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
       select: {
         id: true, foodCode: true, name: true, description: true, category: true, taste: true,
         healthLevel: true, origin: true, proteinType: true, priceCategory: true, mealTime: true,
-        dietCategory: true, texture: true, imageUrl: true
+        dietCategory: true, texture: true, imageUrl: true, sourceDataset: true, sourceId: true,
+        sourceVersion: true, minutes: true, submittedAt: true, nSteps: true, nIngredients: true,
+        tags: true, nutrition: true, steps: true, ingredients: true
       }
     });
     if (!food) return apiError(404, "FOOD_NOT_FOUND", "Makanan aktif tidak ditemukan.");

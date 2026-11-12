@@ -61,6 +61,27 @@ def _split_items(seed: int, source_user: str, source_items: list[str]) -> dict[s
     }
 
 
+def _split_user_histories(seed: int, rows: Iterable[tuple[str, str]]):
+    current_user = None
+    source_items = []
+    for source_user, source_item in rows:
+        if current_user is not None and source_user != current_user:
+            yield current_user, _split_items(seed, current_user, source_items)
+            source_items = []
+        current_user = source_user
+        source_items.append(source_item)
+    if current_user is not None:
+        yield current_user, _split_items(seed, current_user, source_items)
+
+
+def _eligible_user_history(connection: sqlite3.Connection, seed: int, minimum: int) -> list[str]:
+    rows = connection.execute("SELECT user_id,item_id FROM interactions ORDER BY user_id,item_id")
+    return [
+        user_id for user_id, assignments in _split_user_histories(seed, rows)
+        if sum(split == "train" for split in assignments.values()) >= minimum
+    ]
+
+
 def _read_csv(path: Path, required: Iterable[str]):
     source = path.open("r", encoding="utf-8-sig", newline="")
     reader = csv.DictReader(source)
@@ -231,49 +252,45 @@ def prepare_dataset(
                 "SELECT rating, COUNT(*) FROM interactions GROUP BY rating"
             ).fetchall()))
 
-            connection.execute("""CREATE TEMP TABLE pair_splits (
-                user_id TEXT NOT NULL, item_id TEXT NOT NULL, split TEXT NOT NULL,
-                PRIMARY KEY(user_id,item_id))""")
+            fast_user_history = sampling_strategy == "user_history"
+            if fast_user_history:
+                # ponytail: skip two full-source union-find passes; subset connectivity remains fully measured below.
+                population_graph = {"computed": False, "reason": "Full-source graph omitted for bounded user_history cohort; see subset_full."}
+                training_graph = {"computed": False, "reason": "Full-source training graph omitted for bounded user_history cohort; see subset_training."}
+                largest_user_nodes, largest_item_nodes = [], []
+            else:
+                connection.execute("""CREATE TEMP TABLE pair_splits (
+                    user_id TEXT NOT NULL, item_id TEXT NOT NULL, split TEXT NOT NULL,
+                    PRIMARY KEY(user_id,item_id))""")
 
-            def all_split_assignments():
-                current_user = None
-                source_items = []
-                for source_user, source_item in connection.execute(
-                    "SELECT user_id,item_id FROM interactions ORDER BY user_id,item_id"
-                ):
-                    if current_user is not None and source_user != current_user:
-                        assignments = _split_items(seed, current_user, source_items)
-                        yield from ((current_user, item, split) for item, split in assignments.items())
-                        source_items = []
-                    current_user = source_user
-                    source_items.append(source_item)
-                if current_user is not None:
-                    assignments = _split_items(seed, current_user, source_items)
-                    yield from ((current_user, item, split) for item, split in assignments.items())
+                def all_split_assignments():
+                    rows = connection.execute("SELECT user_id,item_id FROM interactions ORDER BY user_id,item_id")
+                    for source_user, assignments in _split_user_histories(seed, rows):
+                        yield from ((source_user, item, split) for item, split in assignments.items())
 
-            connection.executemany("INSERT INTO pair_splits VALUES(?,?,?)", all_split_assignments())
-            connection.execute("CREATE INDEX pair_splits_split_user ON pair_splits(split,user_id)")
-            connection.execute("CREATE INDEX pair_splits_split_item ON pair_splits(split,item_id)")
-            connection.execute("""CREATE TEMP TABLE user_nodes AS
-                SELECT user_id,ROW_NUMBER() OVER (ORDER BY CAST(user_id AS INTEGER)) AS node_id
-                FROM (SELECT DISTINCT user_id FROM interactions)""")
-            connection.execute("""CREATE TEMP TABLE item_nodes AS
-                SELECT item_id,ROW_NUMBER() OVER (ORDER BY CAST(item_id AS INTEGER)) AS node_id
-                FROM (SELECT DISTINCT item_id FROM interactions)""")
-            population_graph = _graph_stats(
-                (tuple(row) for row in connection.execute(
-                    """SELECT u.node_id,i.node_id,x.rating FROM interactions x
-                       JOIN user_nodes u ON u.user_id=x.user_id JOIN item_nodes i ON i.item_id=x.item_id"""
-                )), full_users, full_items,
-            )
-            training_graph, largest_user_nodes, largest_item_nodes = _graph_stats(
-                (tuple(row) for row in connection.execute(
-                    """SELECT u.node_id,i.node_id,x.rating FROM pair_splits s
-                       JOIN interactions x ON x.user_id=s.user_id AND x.item_id=s.item_id
-                       JOIN user_nodes u ON u.user_id=x.user_id JOIN item_nodes i ON i.item_id=x.item_id
-                       WHERE s.split='train'"""
-                )), full_users, full_items, include_largest_members=True,
-            )
+                connection.executemany("INSERT INTO pair_splits VALUES(?,?,?)", all_split_assignments())
+                connection.execute("CREATE INDEX pair_splits_split_user ON pair_splits(split,user_id)")
+                connection.execute("CREATE INDEX pair_splits_split_item ON pair_splits(split,item_id)")
+                connection.execute("""CREATE TEMP TABLE user_nodes AS
+                    SELECT user_id,ROW_NUMBER() OVER (ORDER BY CAST(user_id AS INTEGER)) AS node_id
+                    FROM (SELECT DISTINCT user_id FROM interactions)""")
+                connection.execute("""CREATE TEMP TABLE item_nodes AS
+                    SELECT item_id,ROW_NUMBER() OVER (ORDER BY CAST(item_id AS INTEGER)) AS node_id
+                    FROM (SELECT DISTINCT item_id FROM interactions)""")
+                population_graph = _graph_stats(
+                    (tuple(row) for row in connection.execute(
+                        """SELECT u.node_id,i.node_id,x.rating FROM interactions x
+                           JOIN user_nodes u ON u.user_id=x.user_id JOIN item_nodes i ON i.item_id=x.item_id"""
+                    )), full_users, full_items,
+                )
+                training_graph, largest_user_nodes, largest_item_nodes = _graph_stats(
+                    (tuple(row) for row in connection.execute(
+                        """SELECT u.node_id,i.node_id,x.rating FROM pair_splits s
+                           JOIN interactions x ON x.user_id=s.user_id AND x.item_id=s.item_id
+                           JOIN user_nodes u ON u.user_id=x.user_id JOIN item_nodes i ON i.item_id=x.item_id
+                           WHERE s.split='train'"""
+                    )), full_users, full_items, include_largest_members=True,
+                )
 
             if sampling_strategy in {"k_core", "largest_component"}:
                 connection.execute("CREATE TEMP TABLE eligible_items(source_id TEXT PRIMARY KEY)")
@@ -287,7 +304,7 @@ def prepare_dataset(
                     SELECT s.user_id AS source_id FROM pair_splits s JOIN eligible_items i ON i.source_id=s.item_id
                     WHERE s.split='train' GROUP BY s.user_id HAVING COUNT(*)>=?""", (min_popular_user_train,))
                 connection.execute("CREATE UNIQUE INDEX eligible_users_id ON eligible_users(source_id)")
-            elif sampling_strategy == "user_history":
+            elif sampling_strategy == "user_history" and not fast_user_history:
                 connection.execute("CREATE TEMP TABLE eligible_users AS SELECT user_id AS source_id FROM pair_splits WHERE split='train' GROUP BY user_id HAVING COUNT(*)>=?", (min_user_train,))
                 connection.execute("CREATE UNIQUE INDEX eligible_users_id ON eligible_users(source_id)")
             elif sampling_strategy == "k_core":
@@ -318,11 +335,14 @@ def prepare_dataset(
                 connection.execute("INSERT INTO eligible_items SELECT i.item_id FROM item_nodes i JOIN largest_item_nodes n ON n.node_id=i.node_id")
                 connection.execute("CREATE UNIQUE INDEX eligible_users_id ON eligible_users(source_id)")
 
-            eligible_query = (
-                "SELECT source_id FROM eligible_users" if sampling_strategy != "hash_id"
-                else "SELECT DISTINCT user_id FROM interactions"
-            )
-            eligible_sources = [row[0] for row in connection.execute(eligible_query)]
+            if fast_user_history:
+                eligible_sources = _eligible_user_history(connection, seed, min_user_train)
+            else:
+                eligible_query = (
+                    "SELECT source_id FROM eligible_users" if sampling_strategy != "hash_id"
+                    else "SELECT DISTINCT user_id FROM interactions"
+                )
+                eligible_sources = [row[0] for row in connection.execute(eligible_query)]
             selected_sources = sorted(
                 eligible_sources,
                 key=lambda source_user: (_rank(seed, "user-sample", source_user), _source_key(source_user)),
@@ -339,6 +359,23 @@ def prepare_dataset(
                 "INSERT INTO selected_users VALUES(?,?)",
                 [(source_id, index) for index, source_id in enumerate(sorted(selected_sources, key=_source_key), 1)],
             )
+            if fast_user_history:
+                connection.execute("""CREATE TEMP TABLE pair_splits (
+                    user_id TEXT NOT NULL, item_id TEXT NOT NULL, split TEXT NOT NULL,
+                    PRIMARY KEY(user_id,item_id))""")
+
+                def selected_split_assignments():
+                    rows = connection.execute(
+                        """SELECT interactions.user_id,interactions.item_id FROM interactions
+                           JOIN selected_users ON selected_users.source_id=interactions.user_id
+                           ORDER BY interactions.user_id,interactions.item_id"""
+                    )
+                    for source_user, assignments in _split_user_histories(seed, rows):
+                        yield from ((source_user, item, split) for item, split in assignments.items())
+
+                connection.executemany("INSERT INTO pair_splits VALUES(?,?,?)", selected_split_assignments())
+                connection.execute("CREATE INDEX pair_splits_split_user ON pair_splits(split,user_id)")
+                connection.execute("CREATE INDEX pair_splits_split_item ON pair_splits(split,item_id)")
             selected_items = [row[0] for row in connection.execute(
                 "SELECT DISTINCT i.item_id FROM interactions i JOIN selected_users u ON u.source_id=i.user_id JOIN eligible_items e ON e.source_id=i.item_id"
             )]

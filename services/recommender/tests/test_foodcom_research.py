@@ -162,6 +162,8 @@ class FoodComResearchPipelineTests(unittest.TestCase):
         self.assertEqual(manifest["audit"]["split_users"], {"train": 9, "validation": 8, "test": 8})
 
     def test_train_history_sampler_and_connectivity_manifest_are_reproducible(self):
+        with self.interactions.open("a", encoding="utf-8", newline="") as file:
+            csv.writer(file).writerow((99, 106, "2023-01-01", 5, "below minimum training history"))
         first = prepare_dataset(
             self.interactions, self.recipes, self.root / "history-first",
             source_version="test-release", seed=20261113, user_limit=8,
@@ -177,8 +179,11 @@ class FoodComResearchPipelineTests(unittest.TestCase):
         manifest = json.loads((first / "manifest.json").read_text(encoding="utf-8"))
         self.assertEqual(manifest["preprocessing"]["subset_policy"]["eligible_users_before_cap"], 8)
         self.assertEqual(manifest["preprocessing"]["subset_policy"]["strategy"], "user_history")
-        self.assertEqual(manifest["audit"]["connectivity"]["population_full"]["edges"], 48)
-        self.assertEqual(manifest["audit"]["connectivity"]["population_full"]["components"], 1)
+        self.assertFalse(manifest["audit"]["connectivity"]["population_full"]["computed"])
+        self.assertGreater(manifest["audit"]["connectivity"]["subset_full"]["edges"], 0)
+        self.assertGreater(manifest["audit"]["connectivity"]["subset_training"]["components"], 0)
+        with (first / "user_id_map.csv").open(encoding="utf-8", newline="") as file:
+            self.assertNotIn("99", {row["foodcom_user_id"] for row in csv.DictReader(file)})
 
     def test_popular_k_core_and_largest_component_sampling_execute(self):
         configurations = (

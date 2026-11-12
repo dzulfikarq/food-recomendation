@@ -46,6 +46,8 @@ const env = {
   FOODREC_E2E_PORT: port,
   FOODREC_E2E_OUTPUT_DIR: "test-results/foodcom",
   FOODREC_STORAGE_DIR: "foodrec-foodcom-e2e-test",
+  // ponytail: reuse Next's bundled marker; add server-only explicitly if Next moves it.
+  NODE_PATH: [path.join(root, "node_modules", "next", "dist", "compiled"), process.env.NODE_PATH].filter(Boolean).join(path.delimiter),
   AUTH_URL: `http://127.0.0.1:${port}`,
   AUTH_SECRET: randomBytes(32).toString("hex"),
   FOODREC_WORKER_SECRET: randomBytes(32).toString("hex"),
@@ -82,7 +84,7 @@ await run("Export verified local Food.com subset", python, [
 await run("Generate Prisma client", process.execPath, [prismaCli, "generate"]);
 await run("Apply migrations to new isolated database", process.execPath, [prismaCli, "migrate", "deploy"]);
 await run("Seed isolated E2E administrator only", process.execPath, ["--import", "tsx", "prisma/seed.ts"]);
-await run("Import Food.com catalog and training-only ratings", process.execPath, ["--import", "tsx", "scripts/import-foodcom-catalog.ts", exportDir, "--apply"]);
+await run("Import Food.com catalog and training-only ratings", process.execPath, ["--conditions=react-server", "--import", "tsx", "scripts/import-foodcom-catalog.ts", exportDir, "--apply"]);
 const e2eClient = new pg.Client({ connectionString: testUrl });
 await e2eClient.connect();
 let beforeRetry;
@@ -95,7 +97,7 @@ try {
 } finally {
   await e2eClient.end();
 }
-await run("Repeat import to verify idempotency", process.execPath, ["--import", "tsx", "scripts/import-foodcom-catalog.ts", exportDir, "--apply"]);
+await run("Repeat import to verify idempotency", process.execPath, ["--conditions=react-server", "--import", "tsx", "scripts/import-foodcom-catalog.ts", exportDir, "--apply"]);
 const retryClient = new pg.Client({ connectionString: testUrl });
 await retryClient.connect();
 try {

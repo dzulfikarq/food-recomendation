@@ -38,7 +38,9 @@ const env = {
   DATABASE_URL: testUrl,
   FOODREC_TEST_RUN: "integration",
   NODE_ENV: "test",
-  FOODREC_STORAGE_DIR: process.env.FOODREC_TEST_STORAGE_DIR ?? "./storage-test"
+  FOODREC_STORAGE_DIR: process.env.FOODREC_TEST_STORAGE_DIR ?? "./storage-test",
+  // ponytail: reuse Next's bundled marker; add server-only explicitly if Next moves it.
+  NODE_PATH: [path.join(root, "node_modules", "next", "dist", "compiled"), process.env.NODE_PATH].filter(Boolean).join(path.delimiter)
 };
 const prismaCli = path.join(root, "node_modules", "prisma", "build", "index.js");
 const commands = [
@@ -46,7 +48,7 @@ const commands = [
   [process.execPath, [prismaCli, "migrate", "deploy"]],
   [process.execPath, ["--import", "tsx", "prisma/seed.ts"]],
   [process.execPath, ["--import", "tsx", "prisma/seed-foods.ts"]],
-  [process.execPath, ["--import", "tsx", "--test", "--test-concurrency=1", "tests/auth.integration.test.ts", "tests/foods.integration.test.ts", "tests/ratings.integration.test.ts", "tests/research.integration.test.ts", "tests/recommendation-jobs.integration.test.ts", "tests/recommendation-automation.integration.test.ts", "tests/recommendations.integration.test.ts"]]
+  [process.execPath, ["--conditions=react-server", "--import", "tsx", "--test", "--test-concurrency=1", "tests/auth.integration.test.ts", "tests/foods.integration.test.ts", "tests/ratings.integration.test.ts", "tests/research.integration.test.ts", "tests/recommendation-jobs.integration.test.ts", "tests/recommendation-automation.integration.test.ts", "tests/recommendations.integration.test.ts"]]
 ];
 
 console.info(`Using isolated FoodRec integration database: ${databaseName}`);

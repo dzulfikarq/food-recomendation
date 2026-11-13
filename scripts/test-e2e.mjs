@@ -84,4 +84,4 @@ try {
   if (!readFileSync(nextEnvFile).equals(nextEnvBeforeBuild)) writeFileSync(nextEnvFile, nextEnvBeforeBuild);
   if (!readFileSync(tsconfigFile).equals(tsconfigBeforeBuild)) writeFileSync(tsconfigFile, tsconfigBeforeBuild);
 }
-await run("Run Chromium journeys and real worker check", process.execPath, [playwrightCli, "test", "--config=playwright.config.ts"]);
+await run("Run Phase F Chromium journeys and real worker check", process.execPath, [playwrightCli, "test", "--config=playwright.config.ts", "tests/e2e/phase-f.spec.ts"]);

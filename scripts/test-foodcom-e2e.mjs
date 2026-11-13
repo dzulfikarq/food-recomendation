@@ -45,7 +45,7 @@ const env = {
   FOODREC_NEXT_DIST_DIR: process.env.FOODREC_NEXT_DIST_DIR || ".next-foodrec-foodcom",
   FOODREC_E2E_PORT: port,
   FOODREC_E2E_OUTPUT_DIR: process.env.FOODREC_E2E_OUTPUT_DIR || "test-results/foodcom",
-  FOODREC_STORAGE_DIR: "foodrec-foodcom-e2e-test",
+  FOODREC_STORAGE_DIR: process.env.FOODREC_E2E_STORAGE_DIR || "foodrec-foodcom-e2e-test",
   // ponytail: reuse Next's bundled marker; add server-only explicitly if Next moves it.
   NODE_PATH: [path.join(root, "node_modules", "next", "dist", "compiled"), process.env.NODE_PATH].filter(Boolean).join(path.delimiter),
   AUTH_URL: `http://127.0.0.1:${port}`,

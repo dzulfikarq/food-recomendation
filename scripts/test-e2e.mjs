@@ -42,7 +42,7 @@ const env = {
   FOODREC_TEST_RUN: "e2e",
   NODE_ENV: "test",
   FOODREC_NEXT_DIST_DIR: process.env.FOODREC_NEXT_DIST_DIR || ".next-foodrec-phase-f",
-  FOODREC_STORAGE_DIR: "foodrec-e2e-test",
+  FOODREC_STORAGE_DIR: process.env.FOODREC_E2E_STORAGE_DIR || "foodrec-e2e-test",
   AUTH_URL: baseUrl,
   AUTH_SECRET: randomBytes(32).toString("hex"),
   FOODREC_WORKER_SECRET: randomBytes(32).toString("hex"),

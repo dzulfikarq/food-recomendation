@@ -79,7 +79,50 @@ class FoodComCatalogExportTests(unittest.TestCase):
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
         manifest["preprocessing"]["subset_policy"]["min_user_train"] = 4
         manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
-        with self.assertRaisesRegex(ValueError, "prespecified user_history cohort"):
+        with self.assertRaisesRegex(ValueError, "user_history or k_core=10 cohort"):
+            export_catalog(self.prepared, self.raw, self.output)
+
+    def test_export_supports_prespecified_k_core10_with_user_history_cap(self):
+        with (self.prepared / "user_id_map.csv").open("w", encoding="utf-8", newline="") as file:
+            writer = csv.writer(file)
+            writer.writerow(("user_id", "foodcom_user_id"))
+            writer.writerows(((1, 7001), (2, 7002)))
+        with (self.prepared / "item_id_map.csv").open("w", encoding="utf-8", newline="") as file:
+            writer = csv.writer(file)
+            writer.writerow(("item_id", "foodcom_recipe_id"))
+            writer.writerows((item, 8000 + item) for item in range(1, 11))
+        with (self.prepared / "train.csv").open("w", encoding="utf-8", newline="") as file:
+            writer = csv.writer(file)
+            writer.writerow(("user_id", "item_id", "rating"))
+            writer.writerows((user, item, 4 + (user + item) % 2) for user in (1, 2) for item in range(1, 11))
+        with self.raw.open("w", encoding="utf-8", newline="") as file:
+            writer = csv.writer(file)
+            writer.writerow(("id", "name", "description", "minutes", "submitted", "tags", "nutrition", "n_steps", "steps", "ingredients", "n_ingredients"))
+            writer.writerows((8000 + item, f"source {item}", "", 30, "2019-01-02", "[]", "[1, 2, 3, 4, 5, 6, 7]", 1, "['step']", "['water']", 1) for item in range(1, 11))
+
+        manifest_path = self.prepared / "manifest.json"
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        manifest["source"]["files"]["RAW_recipes.csv"]["sha256"] = hashlib.sha256(self.raw.read_bytes()).hexdigest()
+        manifest["preprocessing"]["subset_policy"] = {
+            "strategy": "k_core", "seed": 20261113, "user_limit": 500, "core_k": 10,
+        }
+        for name in ("train.csv", "user_id_map.csv", "item_id_map.csv"):
+            manifest["artifacts"][name]["sha256"] = hashlib.sha256((self.prepared / name).read_bytes()).hexdigest()
+        manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+
+        export_catalog(self.prepared, self.raw, self.output)
+        exported = json.loads((self.output / "manifest.json").read_text(encoding="utf-8"))
+        self.assertEqual(exported["sampling"], {"strategy": "k_core", "seed": 20261113, "userLimit": 500, "coreK": 10})
+        self.assertEqual(exported["counts"], {"users": 2, "recipes": 10, "ratings": 20})
+
+    def test_export_rejects_other_k_core_threshold(self):
+        manifest_path = self.prepared / "manifest.json"
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        manifest["preprocessing"]["subset_policy"] = {
+            "strategy": "k_core", "seed": 20261113, "user_limit": 500, "core_k": 5,
+        }
+        manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+        with self.assertRaisesRegex(ValueError, "user_history or k_core=10"):
             export_catalog(self.prepared, self.raw, self.output)
 
 

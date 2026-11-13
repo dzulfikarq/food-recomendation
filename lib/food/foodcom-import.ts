@@ -219,9 +219,21 @@ export async function importFoodComCatalog(exportDir: string) {
   const samplingStrategy = text(sampling.strategy, "sampling strategy", 40);
   const seed = positiveInteger(sampling.seed, "sampling seed", 2_147_483_647);
   const userLimit = positiveInteger(sampling.userLimit, "user limit", MAX_USERS);
-  const minUserTrain = positiveInteger(sampling.minUserTrain, "minimum training history");
-  if (samplingStrategy !== "user_history" || seed !== 20_261_113 || minUserTrain < 5) {
-    throw new FoodComImportError("Importer requires prespecified user_history sampling with at least five training ratings per user.");
+  let minimumUserHistory: number;
+  if (samplingStrategy === "user_history") {
+    const minUserTrain = positiveInteger(sampling.minUserTrain, "minimum training history");
+    if (seed !== 20_261_113 || minUserTrain < 5) {
+      throw new FoodComImportError("Importer requires prespecified user_history sampling with at least five training ratings per user.");
+    }
+    minimumUserHistory = minUserTrain;
+  } else if (samplingStrategy === "k_core") {
+    const coreK = positiveInteger(sampling.coreK, "k-core threshold", 10);
+    if (seed !== 20_261_113 || coreK !== 10) {
+      throw new FoodComImportError("Importer requires prespecified k_core sampling with coreK=10.");
+    }
+    minimumUserHistory = coreK;
+  } else {
+    throw new FoodComImportError("Importer requires prespecified user_history or k_core sampling.");
   }
   const expectedCounts = {
     users: positiveInteger(counts.users, "user count", MAX_USERS),
@@ -252,7 +264,7 @@ export async function importFoodComCatalog(exportDir: string) {
   });
   const recipeIds = new Set(recipes.map(({ sourceId }) => sourceId));
   if (recipeIds.size !== recipes.length) throw new FoodComImportError("Food.com recipe IDs must be unique.");
-  const { ratings, userCount } = readRatings(ratingsBuffer, recipeIds, minUserTrain, userLimit);
+  const { ratings, userCount } = readRatings(ratingsBuffer, recipeIds, minimumUserHistory, userLimit);
   const ratedRecipeCount = new Set(ratings.map(({ sourceRecipeId }) => sourceRecipeId)).size;
   if (ratedRecipeCount !== recipes.length) throw new FoodComImportError("Food.com catalog includes recipes without training ratings.");
   if (userCount !== expectedCounts.users || ratings.length !== expectedCounts.ratings) {

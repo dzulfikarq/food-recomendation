@@ -151,17 +151,21 @@ def export_catalog(prepared_dir: Path, raw_recipes: Path, output_dir: Path) -> P
     strategy = subset.get("strategy")
     seed = subset.get("seed")
     min_user_train = subset.get("min_user_train")
+    core_k = subset.get("core_k")
     user_limit = subset.get("user_limit")
     expected_raw_hash = prepared_manifest.get("source", {}).get("files", {}).get("RAW_recipes.csv", {}).get("sha256")
+    valid_strategy = (
+        strategy == "user_history" and type(min_user_train) is int and min_user_train >= 5
+        or strategy == "k_core" and type(core_k) is int and core_k == 10
+    )
     if (
-        not isinstance(source_version, str) or not source_version or strategy != "user_history"
+        not isinstance(source_version, str) or not source_version or not valid_strategy
         or type(seed) is not int or seed != 20261113
-        or type(min_user_train) is not int or min_user_train < 5
         or type(user_limit) is not int or not 1 <= user_limit <= MAX_APP_USERS
         or not isinstance(expected_raw_hash, str) or len(expected_raw_hash) != 64
         or any(character not in "0123456789abcdef" for character in expected_raw_hash)
     ):
-        raise ValueError("prepared manifest does not match the prespecified user_history cohort")
+        raise ValueError("prepared manifest does not match a prespecified user_history or k_core=10 cohort")
     if _sha256(raw_recipes) != expected_raw_hash:
         raise ValueError("RAW_recipes.csv checksum does not match prepared manifest")
 
@@ -189,11 +193,12 @@ def export_catalog(prepared_dir: Path, raw_recipes: Path, output_dir: Path) -> P
             ratings.append((users[user_id], items[item_id], rating))
     if not ratings:
         raise ValueError("training subset has no explicit ratings")
+    minimum_user_train = min_user_train if strategy == "user_history" else core_k
     if (
         len(users) > user_limit or set(users) != set(training_user_counts)
-        or any(count < min_user_train for count in training_user_counts.values())
+        or any(count < minimum_user_train for count in training_user_counts.values())
     ):
-        raise ValueError("user_history cohort does not meet its training-only threshold or 500-user cap")
+        raise ValueError("cohort does not meet its training-only minimum history or 500-user cap")
     if len(ratings) > MAX_APP_RATINGS:
         raise ValueError("training rating count exceeds the 100,000-row worker cap")
     training_recipe_ids = {recipe_id for _, recipe_id, _ in ratings}
@@ -247,7 +252,7 @@ def export_catalog(prepared_dir: Path, raw_recipes: Path, output_dir: Path) -> P
                 "strategy": strategy,
                 "seed": seed,
                 "userLimit": user_limit,
-                "minUserTrain": min_user_train,
+                **({"minUserTrain": min_user_train} if strategy == "user_history" else {"coreK": core_k}),
             },
             "ratingPolicy": "train.csv only; explicit integer ratings 1-5; rating 0 excluded upstream",
             "catalogPolicy": "Include only recipes with at least one selected training rating; validation/test rows never add recipes or ratings.",

@@ -49,6 +49,18 @@ async function waitForJob(jobId: string) {
 }
 
 test("Food.com catalog, app rating, namespaced snapshot, and manual worker staging", async ({ page, browser }) => {
+  const imported = await query<{
+    samplingStrategy: string;
+    userCount: number;
+    recipeCount: number;
+    ratingCount: number;
+  }>(`
+    SELECT "samplingStrategy", "userCount", "recipeCount", "ratingCount"
+    FROM "FoodCatalogImport" WHERE "sourceDataset" = 'FOODCOM' AND "isActive"
+  `);
+  expect(imported.rows).toHaveLength(1);
+  expect(imported.rows[0]).toMatchObject({ samplingStrategy: "k_core", userCount: 500, recipeCount: 6_788, ratingCount: 19_299 });
+
   const catalog = await query<{
     id: number;
     name: string;
@@ -152,6 +164,16 @@ test("Food.com catalog, app rating, namespaced snapshot, and manual worker stagi
       expect(Number(existingFoods.rows[0]?.count)).toBe(recommendations.length);
       const batchCount = await query<{ count: string }>('SELECT COUNT(*)::text AS count FROM "RecommendationBatch"');
       expect(Number(batchCount.rows[0]?.count)).toBe(0);
+      const engineConfig = await query<{
+        autoProcessingEnabled: boolean;
+        automaticPublicationEnabled: boolean;
+        validationStatus: string;
+      }>('SELECT "autoProcessingEnabled", "automaticPublicationEnabled", "validationStatus" FROM "RecommendationEngineConfig" WHERE id = 1');
+      expect(engineConfig.rows[0]).toEqual({
+        autoProcessingEnabled: false,
+        automaticPublicationEnabled: false,
+        validationStatus: "PENDING_VALIDATION",
+      });
     } finally {
       if (worker && worker.exitCode === null) worker.kill();
     }

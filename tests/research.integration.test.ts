@@ -198,7 +198,8 @@ test("research consent, isolated rating, export snapshot, and withdrawal lifecyc
     assert.equal(exportTwo.ratingCount, 1);
     assert.equal(exportTwo.participantCount, 1);
     const exportTwoCsv = await (await api(`/api/admin/research/exports/${exportTwo.id}/download`, "GET", undefined, adminCookie)).text();
-    assert.equal(exportTwoCsv.includes(`${participantA},`), false);
+    const exportTwoUserIds = exportTwoCsv.trim().split(/\r?\n/).slice(1).map((row) => row.split(",", 1)[0]);
+    assert.equal(exportTwoUserIds.includes(String(participantA)), false);
     assert.match(exportTwoCsv, new RegExp(`^${participantB},${foodB.id},2$`, "m"));
 
     const dashboard = await api(`/api/admin/research/dashboard?studyId=${studyId}`, "GET", undefined, adminCookie);

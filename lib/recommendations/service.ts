@@ -61,9 +61,11 @@ async function evaluateRecommendations(
   ]);
   const usersById = new Map(users.map((user) => [user.id, user]));
   const foodsById = new Map(foods.map((food) => [food.id, food]));
-  const sourceUsers = new Set(sourceRatings.map(({ userId }) => userId));
+  // Negative IDs are imported Food.com neighbors, not current USER rating revisions.
+  const accountSourceRatings = sourceRatings.filter(({ userId }) => userId > 0);
+  const sourceUsers = new Set(accountSourceRatings.map(({ userId }) => userId));
   const sourcePairs = new Set(sourceRatings.map(({ userId, foodId }) => `${userId}:${foodId}`));
-  const sourceValues = new Map(sourceRatings.map(({ userId, foodId, rating }) => [`${userId}:${foodId}`, rating]));
+  const sourceValues = new Map(accountSourceRatings.map(({ userId, foodId, rating }) => [`${userId}:${foodId}`, rating]));
   const currentValues = new Map(currentRatings.map(({ userId, foodId, rating }) => [`${userId}:${foodId}`, rating]));
   let ratingsAdded = 0;
   let ratingsChanged = 0;

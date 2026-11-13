@@ -13,3 +13,13 @@ These instructions apply to all agentic work in this repository, including FoodR
 - Do not change Git author identity or manipulate commit timestamps. Do not amend commits, squash work, or rewrite existing history unless the user explicitly instructs it.
 - Never push automatically. Push only after explicit user authorization.
 - At task completion, report completed work, new commit count and short SHAs/messages, checks run, remaining uncommitted changes, working-tree status, and whether changes were pushed.
+
+<!-- BEGIN:nextjs-agent-rules -->
+
+## This is NOT the Next.js you know
+
+This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` (resolved from this file's directory; in monorepos the `next` package may not be visible from the repo root) before writing any code. Heed deprecation notices.
+
+This block is written and re-added by `next dev` — verify at `node_modules/next/dist/server/lib/generate-agent-files.js`. Removing it from a diff only re-creates the uncommitted change; committing it with your work keeps the tree clean.
+
+<!-- END:nextjs-agent-rules -->

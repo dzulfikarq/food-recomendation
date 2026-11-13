@@ -135,6 +135,7 @@ Validasi memakai PostgreSQL 17 terisolasi. Docker tidak tersedia di environment 
 
 ## Dokumen
 
+- [`docs/FOODREC_DEMO_GUIDE.md`](docs/FOODREC_DEMO_GUIDE.md) — setup dan skenario demo lokal K-Core 10.
 - [`docs/PRD.md`](docs/PRD.md) — kebutuhan produk dan status fitur.
 - [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — struktur aplikasi dan auth.
 - [`docs/DATABASE.md`](docs/DATABASE.md) — model domain, tabel penelitian terpisah, dan tabel auth.

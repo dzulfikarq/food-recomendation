@@ -19,7 +19,7 @@
     "db:seed": "tsx prisma/seed.ts",
     "db:seed:foods": "tsx prisma/seed-foods.ts",
     "db:seed:demo-ratings": "tsx prisma/seed-demo-ratings.ts",
-    "foodcom:import": "tsx scripts/import-foodcom-catalog.ts",
+    "foodcom:import": "node scripts/import-foodcom-catalog.mjs",
     "db:studio": "prisma studio"
   },
   "dependencies": {

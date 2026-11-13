@@ -34,6 +34,19 @@ pred(1,105) = 5 (only user 3 rated it; weight cancels)
 
 For active foods 101–106, `kNeighbors=2`, `topN=3`, and minimum overlap 2, Python selects users `[2,3]` and returns `(105, 5.0)`, `(104, 4.277778)`, `(103, 3.888889)`. Food 106 has no neighbor rating and receives no prediction. Foods 101 and 102 are excluded because target user already rated them.
 
+The test oracle is independently hand-calculated from [`synthetic_ratings.csv`](../services/recommender/tests/fixtures/synthetic_ratings.csv), not copied from engine output. The regression test checks each stage and calls worker `compute_result` with the same fixture:
+
+```text
+sim(1,2) = 26 / (sqrt(26) × sqrt(26)) = 1
+sim(1,3) = 10 / (sqrt(26) × sqrt(26)) = 5/13
+pred(1,103) = (1×5 + (5/13)×1) / (1 + 5/13) = 35/9
+pred(1,104) = (1×4 + (5/13)×5) / (1 + 5/13) = 77/18
+pred(1,105) = ((5/13)×5) / (5/13) = 5
+pred(1,106) = unavailable (no selected neighbor rated it)
+```
+
+Expected rank is `105, 104, 103`; rated foods `101, 102` are excluded. Separate regression tests cover insufficient overlap, top-k and Top-N ties, cold-start, no-neighbor, and no-prediction outcomes. This verifies implementation against this explicit mathematical definition only; it does not approve research methodology, demonstrate recommendation quality, or establish Altair parity.
+
 ## Phase B package and comparison
 
 Extracted fixtures: [`services/recommender/tests/fixtures/phase_b_altair`](../services/recommender/tests/fixtures/phase_b_altair). Original 13 manifest payload checksums matched during extraction; native CSV and diagnostics were added during this investigation. Package says 43-row fixture is toy/not real research data. The 264/66 datasets are a seeded (`20261025`) split of an 879-row snapshot; provenance of the source ratings is unverified. Source snapshot SHA-256: `a2cda622ac8702538c3ba0d9c0ae0ad73be9e88c5d3699e3933cd215c2f23337`; 66-row test SHA-256: `a5bf580b2d951864937f7f3803de9df50f7280556f02e5d0d32c38a6945dfaea`. Train has 12 ratings for each of 22 users; test has 3 held-out ratings per user and no duplicate user-food pairs across splits. Original 879 rows were not loaded into any database.
@@ -142,6 +155,25 @@ This check does **not** call Top-N. For each of 66 test pairs, it selects neighb
 - Train-264 native Top-1 comparison: **MISMATCH** (22/22 row count, user IDs and rank values align; 0/22 item IDs align).
 - Mathematical parity: **Pending Validation**. Public source suggests binary-feedback/support scoring, but runtime linkage and matching neighbor/score evidence are missing.
 - Automatic processing: **OFF**. Do not open publication/automation gate from ranking evidence.
+
+## Validation dimensions and future gate criteria
+
+Do not collapse these independent decisions into one `VALIDATED` claim:
+
+| Dimension | Acceptance evidence | Current status |
+| --- | --- | --- |
+| Mathematical implementation | Frozen equation/semantics; independent hand-computed fixture checks similarity, overlap threshold, neighbor order/top-k, weighted predictions, exclusions, deterministic ties, and missing outcomes; regression tests pass. | The Python implementation can be checked against its stated explicit-rating definition. This is not methodology approval or Altair parity. |
+| Application integration | Isolated PostgreSQL `_test`; actual worker output matches oracle; source/current revisions and stale flag agree; historical rows stay distinct from active account ratings; artifact remains `UNVERIFIED`; automatic publication is rejected; existing manual publication tests pass. | Integration evidence only. No gate change. |
+| Recommendation quality | Approved, provenance-checked data and predeclared evaluation; leakage-free train/validation/test; tuning only on validation; compare rating and ranking metrics to baselines; report coverage/missing reasons and uncertainty. | **Pending.** Existing 42/66 pilot metrics and Top-1 comparisons do not meet this bar. |
+| Dataset and production readiness | Rights/provenance and permitted use confirmed; data/privacy review, security, capacity, backup/restore, monitoring, rollback, and explicit release approval complete. | **Pending.** Food.com redistribution/use rights remain unverified; no production readiness claim. |
+
+Historical rows are part of the exported combined dataset, so their insert/update/delete correctly advances the global dataset revision. They are negative, namespaced worker neighbors—not positive FoodRec accounts—and must not inflate account-only `sourceUserCount` or appear as removed active-user ratings during CSV revalidation.
+
+The current gate explicitly encodes Altair parity: `RecommendationEngineConfig.validationStatus` is database-constrained to `PENDING_VALIDATION`; the admin API cannot patch it and reports `MATHEMATICAL_PARITY_PENDING_VALIDATION`. A separate database trigger rejects automatic jobs. `RecommendationJobArtifact.verificationStatus` is database-constrained to `UNVERIFIED`; worker success cannot promote or publish it. These constraints were not changed.
+
+Manual CSV `RecommendationBatch.status=VALIDATED` means only that FoodRec's structural, reference, and snapshot checks passed. Admin confirmation can publish that manual batch while the worker gate stays closed. It is not evidence of algorithm correctness, quality, license, or production readiness.
+
+Before any gate-opening migration, decision owner must explicitly choose whether exact parity with a specified Altair workflow is mandatory. If mandatory, require the exact workflow/settings, installed Altair and extension versions/build hash, matched candidate universe, and comparable neighbor/similarity/prediction evidence; native Top-N rows alone are insufficient. If the approved reference is instead the explicit-rating Python definition, record that policy change and its sign-off—do not silently reinterpret the existing parity gate. Only after all four dimensions pass separately, an explicitly approved additive migration may relax the database constraints; worker artifacts must still require an explicit verification action. Automatic processing and publication require separate authorization.
 
 ## Phase F QA evidence (2026-11-11)
 

@@ -136,6 +136,10 @@ test("Food Management CRUD, image uploads, hybrid delete, and atomic insert-only
     assert.equal((await json(`/api/admin/foods/${foodId}`, "PATCH", { foodCode: "CHANGED-001" }, adminCookie)).status, 409);
     assert.equal((await json(`/api/admin/foods/${foodId}/status`, "PATCH", { isActive: false }, adminCookie)).status, 200);
     assert.equal((await get(`/api/admin/foods?search=${foodCode}&status=inactive`, adminCookie)).status, 200);
+    const hiddenFromCatalog = await get(`/api/foods?search=${foodCode}`);
+    const hiddenCatalogData = (await hiddenFromCatalog.json()).data;
+    assert.equal(hiddenCatalogData.pagination.total, 0);
+    assert.equal((await get(`/api/foods/${foodId}`)).status, 404);
     assert.equal((await json(`/api/admin/foods/${foodId}/status`, "PATCH", { isActive: true }, adminCookie)).status, 200);
 
     const admin = await prisma.user.findUniqueOrThrow({ where: { email: env.ADMIN_EMAIL } });

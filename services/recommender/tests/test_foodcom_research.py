@@ -14,6 +14,7 @@ from foodcom_research import (
     _model_predictions,
     _neighbor_support,
     _split_items,
+    evaluate_validation_dataset,
     evaluate_dataset,
     prepare_dataset,
 )  # noqa: E402
@@ -100,6 +101,25 @@ class FoodComResearchPipelineTests(unittest.TestCase):
         self.assertIn("coverage", report["test"]["baselines"]["global_mean"]["all_test"])
         self.assertEqual(set(report["test"]["ubcf_by_k"]), {"1", "3"})
         self.assertEqual(report["artifacts"]["test_predictions.csv"]["rows"], 8)
+
+    def test_validation_only_evaluator_never_requires_test_artifact(self):
+        data = self._prepare("validation-only-data")
+        (data / "test.csv").unlink()
+        output = evaluate_validation_dataset(
+            data, self.root / "validation-only.json", ks=(1, 3, 5, 10), min_common=1,
+        )
+        report = json.loads(output.read_text(encoding="utf-8"))
+        self.assertEqual(
+            report["protocol"]["data_access"],
+            "train.csv and validation.csv only; test artifacts are not opened or checksummed",
+        )
+        self.assertEqual([candidate["k"] for candidate in report["validation"]["candidates"]], [1, 3, 5, 10])
+        for candidate in report["validation"]["candidates"]:
+            for strategy in ("global_top_k", "item_aware"):
+                metrics = candidate[strategy]["metrics"]
+                self.assertEqual(metrics["n_predicted"] + metrics["n_missing"], metrics["n_total"])
+                for baseline in candidate[strategy]["baselines"].values():
+                    self.assertEqual(baseline["on_model_covered"]["n_total"], metrics["n_predicted"])
 
     def test_test_rating_changes_do_not_change_validation_selected_k(self):
         original = self._prepare("original-data")

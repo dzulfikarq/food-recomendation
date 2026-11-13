@@ -747,6 +747,134 @@ def _paired_metric(
     return _metric([actual for actual, _ in selected], [prediction for _, prediction in selected], [None] * len(selected))
 
 
+def _item_aware_predictions(
+    training: dict[int, dict[int, int]],
+    evaluation: list[tuple[int, int, int]],
+    k: int,
+    neighbor_cache: dict[int, tuple],
+) -> tuple[list[float | None], list[str | None]]:
+    predictions = []
+    reasons = []
+    for user_id, item_id, _ in evaluation:
+        neighbors = tuple(
+            neighbor for neighbor in neighbor_cache[user_id]
+            if item_id in training[neighbor.user_id]
+        )[:k]
+        prediction = predict_rating(item_id, neighbors, training)
+        predictions.append(prediction)
+        reasons.append(None if prediction is not None else (
+            "no_item_raters" if not neighbors else "no_eligible_neighbors"
+        ))
+    return predictions, reasons
+
+
+def evaluate_validation_dataset(
+    data_dir: Path,
+    output_file: Path,
+    *,
+    ks: tuple[int, ...] = (1, 3, 5, 10),
+    min_common: int = 1,
+) -> Path:
+    """Compare global and item-aware neighbors without opening any test artifact."""
+    if output_file.exists():
+        raise ValueError(f"output path already exists: {output_file}")
+    if not ks or any(k < 1 for k in ks) or min_common < 1 or len(set(ks)) != len(ks):
+        raise ValueError("k candidates must be unique and positive; minimum common ratings must be positive")
+
+    train_path = data_dir / "train.csv"
+    validation_path = data_dir / "validation.csv"
+    train_rows, training = _load_ratings(train_path)
+    validation_rows, _ = _load_ratings(validation_path)
+    train_pairs = {(user, item) for user, item, _ in train_rows}
+    validation_pairs = {(user, item) for user, item, _ in validation_rows}
+    if train_pairs & validation_pairs:
+        raise ValueError("user-item pair leakage between train and validation")
+    if any(user not in training for user, _, _ in validation_rows):
+        raise ValueError("validation user missing from training data")
+
+    validation_neighbor_cache, neighbor_stats = _neighbor_support(training, validation_rows, min_common)
+    baseline_predictions = _baseline_predictions(training, validation_rows)
+    actuals = [rating for _, _, rating in validation_rows]
+    candidates = []
+    for k in sorted(ks):
+        global_predictions, global_reasons = _model_predictions(
+            training, validation_rows, k, min_common, validation_neighbor_cache,
+        )
+        item_predictions, item_reasons = _item_aware_predictions(
+            training, validation_rows, k, validation_neighbor_cache,
+        )
+        candidates.append({
+            "k": k,
+            "global_top_k": {
+                "metrics": _metric(actuals, global_predictions, global_reasons),
+                "baselines": {
+                    name: {
+                        "all_validation": _metric(actuals, predictions, reasons),
+                        "on_model_covered": _paired_metric(actuals, predictions, global_predictions),
+                    }
+                    for name, (predictions, reasons) in baseline_predictions.items()
+                },
+            },
+            "item_aware": {
+                "metrics": _metric(actuals, item_predictions, item_reasons),
+                "baselines": {
+                    name: {
+                        "all_validation": _metric(actuals, predictions, reasons),
+                        "on_model_covered": _paired_metric(actuals, predictions, item_predictions),
+                    }
+                    for name, (predictions, reasons) in baseline_predictions.items()
+                },
+            },
+        })
+
+    users = {user for user, _, _ in train_rows}
+    items = {item for _, item, _ in train_rows}
+    train_graph = _graph_stats(
+        train_rows,
+        max(users),
+        max(items),
+    )
+    validation_items = {item for _, item, _ in validation_rows}
+    report = {
+        "protocol": {
+            "data_access": "train.csv and validation.csv only; test artifacts are not opened or checksummed",
+            "similarity": "existing explicit-rating cosine on co-rated items; positive similarities only",
+            "global_top_k": "rank all eligible training users by similarity, then truncate to k",
+            "item_aware": "filter the same similarity ranking to users who rated target item, then truncate to k; methodological variant, not production worker behavior",
+            "prediction": "positive-similarity-weighted average; no prediction without a selected neighbor rating target item",
+            "min_common_ratings": min_common,
+            "k_candidates": sorted(ks),
+            "selection": "no parameter selected; report all preregistered validation candidates",
+        },
+        "input_sha256": {
+            "train.csv": _sha256(train_path),
+            "validation.csv": _sha256(validation_path),
+        },
+        "training": {
+            "ratings": len(train_rows),
+            "users": len(users),
+            "items": len(items),
+            "connectivity": train_graph,
+        },
+        "validation": {
+            "ratings": len(validation_rows),
+            "users": len({user for user, _, _ in validation_rows}),
+            "items": len(validation_items),
+            "items_seen_in_training": len(validation_items & items),
+            "items_unseen_in_training": len(validation_items - items),
+            "neighbor_support": neighbor_stats,
+            "candidates": candidates,
+        },
+    }
+
+    output_file.parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(prefix=f"{output_file.stem}-", dir=output_file.parent) as temp_dir:
+        staged = Path(temp_dir) / output_file.name
+        staged.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        staged.replace(output_file)
+    return output_file
+
+
 def _verify_artifacts(data_dir: Path, manifest: dict) -> None:
     expected = {"canonical.csv", "user_id_map.csv", "item_id_map.csv", "train.csv", "validation.csv", "test.csv"}
     artifacts = manifest.get("artifacts", {})
@@ -914,6 +1042,13 @@ def main(argv: list[str] | None = None) -> int:
     evaluate.add_argument("--output-dir", type=Path, required=True)
     evaluate.add_argument("--ks", type=_positive_int, nargs="+", default=(1, 3, 5, 10))
     evaluate.add_argument("--min-common", type=_positive_int, default=1)
+    evaluate_validation = commands.add_parser(
+        "evaluate-validation", help="compare neighbor strategies using train and validation files only",
+    )
+    evaluate_validation.add_argument("--data-dir", type=Path, required=True)
+    evaluate_validation.add_argument("--output-file", type=Path, required=True)
+    evaluate_validation.add_argument("--ks", type=_positive_int, nargs="+", default=(1, 3, 5, 10))
+    evaluate_validation.add_argument("--min-common", type=_positive_int, default=1)
     args = parser.parse_args(argv)
     try:
         if args.command == "prepare":
@@ -926,6 +1061,10 @@ def main(argv: list[str] | None = None) -> int:
                 min_popular_user_train=args.min_popular_user_train,
                 min_item_train=args.min_item_train,
                 core_k=args.core_k,
+            )
+        elif args.command == "evaluate-validation":
+            result = evaluate_validation_dataset(
+                args.data_dir, args.output_file, ks=tuple(args.ks), min_common=args.min_common,
             )
         else:
             result = evaluate_dataset(args.data_dir, args.output_dir, ks=tuple(args.ks), min_common=args.min_common)

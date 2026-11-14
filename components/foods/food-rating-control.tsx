@@ -49,7 +49,9 @@ export function FoodRatingControl({ foodId, foodName, currentRating, canRate, ro
         return;
       }
       setSavedRating(rating);
-      setMessage("Rating berhasil disimpan.");
+      setMessage(result.data?.recommendationJobId
+        ? "Rating berhasil disimpan. Rekomendasi Python sedang diproses."
+        : "Rating berhasil disimpan.");
       router.refresh();
     } catch {
       setError("Koneksi gagal. Rating belum tersimpan.");

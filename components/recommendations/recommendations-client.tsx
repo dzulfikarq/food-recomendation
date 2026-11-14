@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { ArrowRight, RefreshCw, Sparkles, Star } from "lucide-react";
 import { Button, Card, Container, PageHeader } from "@/components/ui";
@@ -17,13 +17,13 @@ function formattedDate(value: string) {
   return new Intl.DateTimeFormat("id-ID", { dateStyle: "long", timeStyle: "short" }).format(new Date(value));
 }
 
-export function RecommendationsClient() {
+export function RecommendationsClient({ automaticPrototype = false }: { automaticPrototype?: boolean }) {
   const [data, setData] = useState<RecommendationResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  async function load() {
-    setLoading(true);
+  const load = useCallback(async (showLoading = true) => {
+    if (showLoading) setLoading(true);
     setError(null);
     try {
       const response = await fetch("/api/me/recommendations", { cache: "no-store" });
@@ -33,25 +33,34 @@ export function RecommendationsClient() {
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Rekomendasi tidak dapat dimuat.");
     } finally {
-      setLoading(false);
+      if (showLoading) setLoading(false);
     }
-  }
+  }, []);
 
-  useEffect(() => { void load(); }, []);
+  useEffect(() => { void load(); }, [load]);
+  useEffect(() => {
+    if (data?.status !== "PROCESSING") return;
+    const timer = window.setTimeout(() => { void load(false); }, 1_000);
+    return () => window.clearTimeout(timer);
+  }, [data?.status, load]);
 
   return <Container className="py-10 sm:py-14">
-    <PageHeader eyebrow="UNTUK KAMU" title="Rekomendasi Untukmu" description="Pilihan ini disusun dari pola rating dan diterbitkan oleh admin. Rating yang baru kamu simpan tidak langsung membuat rekomendasi baru." />
+    <PageHeader eyebrow="UNTUK KAMU" title="Rekomendasi Untukmu" description={automaticPrototype
+      ? "Python UBCF memproses rating tersimpan secara otomatis pada prototipe lokal. Hasil dan alasan kosong diperbarui saat worker selesai."
+      : "Pilihan ini disusun dari pola rating dan diterbitkan oleh admin. Rating yang baru kamu simpan tidak langsung membuat rekomendasi baru."} />
     {loading && <Card className="grid min-h-48 place-items-center text-sm text-secondary"><div role="status">Memuat rekomendasi…</div></Card>}
     {!loading && error && <Card className="grid min-h-56 place-items-center px-6 text-center"><div><p role="alert" className="m-0 text-sm text-red-700">{error}</p><Button type="button" variant="secondary" className="mt-4" onClick={() => void load()}><RefreshCw size={15} aria-hidden="true" /> Coba lagi</Button></div></Card>}
     {!loading && !error && data?.publishedAt && <p className="mb-5 text-sm text-secondary">Rekomendasi terakhir diperbarui pada {formattedDate(data.publishedAt)}.</p>}
     {!loading && !error && data?.status === "READY" && <>
       <div className="grid auto-rows-fr gap-4 sm:grid-cols-2 lg:grid-cols-3">{data.recommendations.map(({ food, rank }) => <RecommendationCard key={food.id} food={food} rank={rank} />)}</div>
     </>}
-    {!loading && !error && data?.status === "NO_RATINGS" && <EmptyState icon="rating" title="Mulai dari makanan yang kamu kenal" description="Belum ada rating tersimpan. Jelajahi katalog dan nilai makanan yang pernah kamu coba. Rekomendasi baru bisa muncul setelah admin memproses dan menerbitkan hasil." action="Jelajahi makanan" href="/foods" />}
-    {!loading && !error && data?.status === "NO_BATCH" && <EmptyState icon="recommendation" title="Belum ada rekomendasi yang diterbitkan" description="Ratingmu tetap tersimpan. Belum ada hasil rekomendasi aktif; menyimpan rating tidak otomatis memulai pemrosesan." action="Lihat rating saya" href="/my-ratings" secondaryAction="Jelajahi makanan" secondaryHref="/foods" />}
+    {!loading && !error && data?.status === "PROCESSING" && <Card className="grid min-h-48 place-items-center text-sm text-secondary"><div role="status">Python UBCF sedang memproses ratingmu. Halaman akan diperbarui otomatis.</div></Card>}
+    {!loading && !error && data?.status === "PROCESSING_FAILED" && <EmptyState icon="recommendation" title="Pemrosesan rekomendasi gagal" description="Worker Python berhenti atau verifikasi teknis gagal. Rating tetap tersimpan; periksa worker lokal lalu simpan ulang rating untuk mencoba lagi." action="Lihat rating saya" href="/my-ratings" />}
+    {!loading && !error && data?.status === "NO_RATINGS" && <EmptyState icon="rating" title="Mulai dari makanan yang kamu kenal" description={automaticPrototype ? "Belum ada rating tersimpan. Nilai makanan yang pernah kamu coba; worker Python akan memproses hasil pada prototipe lokal." : "Belum ada rating tersimpan. Jelajahi katalog dan nilai makanan yang pernah kamu coba. Rekomendasi baru bisa muncul setelah admin memproses dan menerbitkan hasil."} action="Jelajahi makanan" href="/foods" />}
+    {!loading && !error && data?.status === "NO_BATCH" && <EmptyState icon="recommendation" title="Belum ada rekomendasi yang diterbitkan" description={automaticPrototype ? "Ratingmu tetap tersimpan. Sistem sedang menyiapkan pemrosesan otomatis untuk prototipe lokal." : "Ratingmu tetap tersimpan. Belum ada hasil rekomendasi aktif; menyimpan rating tidak otomatis memulai pemrosesan."} action="Lihat rating saya" href="/my-ratings" secondaryAction="Jelajahi makanan" secondaryHref="/foods" />}
     {!loading && !error && data?.status === "NO_NEIGHBORS" && <EmptyState icon="recommendation" title="Belum ada pengguna dengan pola rating serupa" description="Ratingmu tersimpan, tetapi data belum menemukan pengguna lain dengan rating yang cukup mirip untuk membentuk rekomendasi." action="Lihat rating saya" href="/my-ratings" secondaryAction="Jelajahi makanan" secondaryHref="/foods" />}
     {!loading && !error && data?.status === "NO_PREDICTIONS" && <EmptyState icon="recommendation" title="Belum ada makanan yang dapat diprediksi" description="Pengguna dengan pola rating serupa belum memberi rating pada makanan aktif yang belum kamu nilai." action="Lihat rating saya" href="/my-ratings" secondaryAction="Jelajahi makanan" secondaryHref="/foods" />}
-    {!loading && !error && data?.status === "NOT_INCLUDED" && <EmptyState icon="recommendation" title="Belum ada hasil untuk akunmu" description="Akunmu tidak tercakup dalam batch rekomendasi aktif. Kamu bisa menjelajahi katalog sambil menunggu admin menerbitkan batch yang mencakup akunmu." action="Jelajahi makanan" href="/foods" secondaryAction="Lihat rating saya" secondaryHref="/my-ratings" />}
+    {!loading && !error && data?.status === "NOT_INCLUDED" && <EmptyState icon="recommendation" title="Belum ada hasil untuk akunmu" description={automaticPrototype ? "Akunmu belum tercakup dalam hasil Python terbaru. Simpan perubahan rating untuk memicu snapshot dan pemrosesan ulang." : "Akunmu tidak tercakup dalam batch rekomendasi aktif. Kamu bisa menjelajahi katalog sambil menunggu admin menerbitkan batch yang mencakup akunmu."} action="Jelajahi makanan" href="/foods" secondaryAction="Lihat rating saya" secondaryHref="/my-ratings" />}
     {!loading && !error && data?.status === "ALL_RATED" && <EmptyState icon="rating" title="Semua rekomendasi sudah kamu nilai" description="Semua makanan aktif dalam daftar rekomendasi sudah kamu beri rating. Nilaimu tersimpan di Rating Saya." action="Lihat rating saya" href="/my-ratings" secondaryAction="Jelajahi makanan" secondaryHref="/foods" />}
     {!loading && !error && data?.status === "NO_AVAILABLE_FOODS" && <EmptyState icon="recommendation" title="Belum ada rekomendasi aktif untuk ditampilkan" description="Makanan dalam hasil terakhir sudah dinilai atau tidak lagi aktif. Kamu tetap bisa menjelajahi katalog makanan aktif." action="Jelajahi makanan" href="/foods" secondaryAction="Lihat rating saya" secondaryHref="/my-ratings" />}
   </Container>;

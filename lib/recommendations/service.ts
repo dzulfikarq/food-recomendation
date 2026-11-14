@@ -6,6 +6,7 @@ import { readRatingExport, readRecommendationImport, removeRecommendationImport,
 import { RECOMMENDATION_PREVIEW_SIZE } from "@/lib/recommendations/constants";
 import { parseRatingSnapshotCsv, parseRecommendationCsv, type ParsedRecommendationRow, type RecommendationCsvError } from "@/lib/recommendations/csv";
 import { RECOMMENDATION_OUTCOME_STATUSES, type RecommendationOutcomeStatus, type RecommendationPreviewRow, type RecommendationValidationReport, type UserRecommendationStatus } from "@/lib/recommendations/types";
+import { ensureTestPrototypeRecommendationJob } from "@/lib/recommendations/test-prototype";
 
 type Database = Prisma.TransactionClient;
 
@@ -252,6 +253,16 @@ export async function publishRecommendationBatch(batchId: number, adminId: numbe
 export async function getUserRecommendations(userId: number) {
   const ratingCount = await prisma.rating.count({ where: { userId } });
   if (!ratingCount) return { status: "NO_RATINGS" as const, publishedAt: null, recommendations: [] };
+
+  try {
+    const prototypeJob = await ensureTestPrototypeRecommendationJob();
+    if (prototypeJob?.status === "PROCESSING") return { status: "PROCESSING" as const, publishedAt: null, recommendations: [] };
+    if (prototypeJob?.status === "FAILED") return { status: "PROCESSING_FAILED" as const, publishedAt: null, recommendations: [] };
+  } catch {
+    if (process.env.FOODREC_TEST_RUN === "e2e" && process.env.FOODREC_TEST_AUTO_RECOMMENDATIONS === "1") {
+      return { status: "PROCESSING_FAILED" as const, publishedAt: null, recommendations: [] };
+    }
+  }
 
   const batch = await prisma.recommendationBatch.findFirst({ where: { status: "PUBLISHED" }, orderBy: [{ publishedAt: "desc" }, { id: "desc" }], select: { id: true, publishedAt: true, validationReport: true } });
   if (!batch) return { status: "NO_BATCH" as const, publishedAt: null, recommendations: [] };

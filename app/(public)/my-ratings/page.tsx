@@ -8,14 +8,18 @@ import { Container, PageHeader } from "@/components/ui";
 import { requireUser } from "@/lib/authz";
 import { myRatingsQuerySchema } from "@/lib/food/schemas";
 import { prisma } from "@/lib/prisma";
+import { testPrototypeAutomationEnabled } from "@/lib/recommendations/test-prototype";
 
 export const metadata: Metadata = { title: "Rating Saya" };
 
 export default async function MyRatingsPage({ searchParams }: { searchParams: Promise<{ page?: string }> }) {
   const user = await requireUser();
+  const prototypeEnabled = testPrototypeAutomationEnabled();
 
   return <Container className="py-10 sm:py-14">
-    <PageHeader eyebrow="PREFERENSI SAYA" title="Rating Saya" description="Semua rating tersimpan di akunmu. Pilih rating makanan aktif untuk mengubahnya; perubahan tidak langsung membuat rekomendasi baru." />
+    <PageHeader eyebrow="PREFERENSI SAYA" title="Rating Saya" description={prototypeEnabled
+      ? "Semua rating tersimpan di akunmu. Saat rating disimpan, Python UBCF memproses rekomendasi pada prototipe lokal; status hasil tampil di halaman Rekomendasi."
+      : "Semua rating tersimpan di akunmu. Pilih rating makanan aktif untuk mengubahnya; perubahan tidak langsung membuat rekomendasi baru."} />
     <Suspense fallback={<FoodGridSkeleton count={6} />}>
       <RatingsList userId={Number(user.id)} searchParams={searchParams} />
     </Suspense>

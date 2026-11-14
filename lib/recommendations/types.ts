@@ -9,7 +9,7 @@ export const RECOMMENDATION_OUTCOME_STATUSES = [
 ] as const;
 
 export type RecommendationOutcomeStatus = typeof RECOMMENDATION_OUTCOME_STATUSES[number];
-export type UserRecommendationStatus = "READY" | "NO_RATINGS" | "NO_BATCH" | "NOT_INCLUDED" | "ALL_RATED" | "NO_AVAILABLE_FOODS" | "NO_NEIGHBORS" | "NO_PREDICTIONS";
+export type UserRecommendationStatus = "READY" | "NO_RATINGS" | "NO_BATCH" | "NOT_INCLUDED" | "ALL_RATED" | "NO_AVAILABLE_FOODS" | "NO_NEIGHBORS" | "NO_PREDICTIONS" | "PROCESSING" | "PROCESSING_FAILED";
 
 export type RecommendationPreviewRow = {
   row: number;

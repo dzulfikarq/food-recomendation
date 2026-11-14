@@ -41,7 +41,10 @@ export async function enqueueTestPrototypeRecommendationJob() {
       const state = states[0];
       if (!state) throw new Error("RATING_DATASET_STATE_MISSING");
       const config = await tx.recommendationEngineConfig.findUniqueOrThrow({ where: { id: 1 } });
-      if (config.autoProcessingEnabled || config.automaticPublicationEnabled || config.engineVersion !== RECOMMENDATION_ENGINE_VERSION) {
+      if (
+        config.validationStatus !== "PENDING_VALIDATION" || config.autoProcessingEnabled ||
+        config.automaticPublicationEnabled || config.engineVersion !== RECOMMENDATION_ENGINE_VERSION
+      ) {
         throw new Error("TEST_PROTOTYPE_GATES_INVALID");
       }
       const administrator = await tx.user.findFirst({ where: { role: "ADMIN" }, orderBy: { id: "asc" }, select: { id: true } });
@@ -178,6 +181,34 @@ export async function publishTestPrototypeArtifactIfQueued(jobId: string) {
   const job = await prisma.recommendationJob.findUnique({ where: { id: jobId }, select: { trigger: true } });
   if (job?.trigger !== "TEST_PROTOTYPE") return null;
   return verifyAndPublishTestPrototypeArtifact(jobId);
+}
+
+export async function ensureTestPrototypeRecommendationJob() {
+  if (!testPrototypeAutomationEnabled()) return null;
+  const state = await prisma.ratingDatasetState.findUnique({ where: { id: 1 }, select: { currentRevision: true } });
+  if (!state) throw new Error("RATING_DATASET_STATE_MISSING");
+
+  const batch = await prisma.recommendationBatch.findFirst({
+    where: { status: "PUBLISHED" },
+    orderBy: [{ publishedAt: "desc" }, { id: "desc" }],
+    select: { validationReport: true }
+  });
+  const report = batch?.validationReport;
+  const verification = report && typeof report === "object" && !Array.isArray(report) ? report.artifactVerification : null;
+  if (
+    verification && typeof verification === "object" && !Array.isArray(verification) &&
+    verification.status === "REVERIFIED_FOR_LOCAL_PROTOTYPE" && verification.currentRevision === state.currentRevision.toString()
+  ) return null;
+
+  const queued = await enqueueTestPrototypeRecommendationJob();
+  if (!queued.jobId) return null;
+  const job = await prisma.recommendationJob.findUnique({ where: { id: queued.jobId }, select: { status: true, finishedAt: true } });
+  if (!job) return { status: "FAILED" as const };
+  if (job.status === "FAILED" || job.status === "CANCELLED") return { status: "FAILED" as const };
+  if (job.status === "SUCCEEDED" && job.finishedAt && Date.now() - job.finishedAt.getTime() > 30_000) {
+    return { status: "FAILED" as const };
+  }
+  return { status: "PROCESSING" as const };
 }
 
 async function activePrototypeFoodIds(db: typeof prisma | Prisma.TransactionClient) {

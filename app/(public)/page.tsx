@@ -3,6 +3,7 @@ import { ArrowRight, ArrowUpRight, CookingPot, Database, Sparkles, Star, Utensil
 import { Badge, ButtonLink, Card, Container } from "@/components/ui";
 import { getSession } from "@/lib/authz";
 import { getUserRecommendations } from "@/lib/recommendations/service";
+import { testPrototypeAutomationEnabled } from "@/lib/recommendations/test-prototype";
 import { prisma } from "@/lib/prisma";
 
 function formatDate(value: Date) {
@@ -11,6 +12,7 @@ function formatDate(value: Date) {
 
 export default async function HomePage({ searchParams }: { searchParams: Promise<{ error?: string }> }) {
   const [{ error }, session] = await Promise.all([searchParams, getSession()]);
+  const prototypeEnabled = testPrototypeAutomationEnabled();
 
   if (session?.user.role === "USER") {
     const userId = Number(session.user.id);
@@ -23,6 +25,8 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
     const name = session.user.name.trim().split(/\s+/)[0] || session.user.name;
     const nextAction = recommendations.status === "READY"
       ? { href: "/recommendations", label: "Lihat rekomendasi" }
+      : recommendations.status === "PROCESSING"
+        ? { href: "/recommendations", label: "Pantau pemrosesan" }
       : foodCount === 0
         ? { href: "/foods", label: "Lihat katalog makanan" }
         : ratingCount > 0 && activeRatingCount >= foodCount
@@ -47,7 +51,9 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
         <Card className="p-5 sm:p-6">
           <p className="m-0 text-xs font-bold uppercase tracking-[.14em] text-primary">LANGKAH BERIKUTNYA</p>
           <h2 className="mb-0 mt-3 text-lg font-bold text-gray-950">{ratingCount ? "Lanjutkan sesuai seleramu" : "Mulai dari makanan yang kamu kenal"}</h2>
-          <p className="mb-0 mt-2 text-sm leading-6 text-secondary">{ratingCount ? "Beri rating pada makanan yang pernah kamu coba, atau lihat rating yang sudah tersimpan." : "Beberapa rating dapat membantu menggambarkan seleramu, tetapi tidak menjamin rekomendasi langsung tersedia. Hasil muncul setelah admin menerbitkan rekomendasi untuk akunmu."}</p>
+          <p className="mb-0 mt-2 text-sm leading-6 text-secondary">{ratingCount
+            ? prototypeEnabled ? "Beri atau ubah rating; Python UBCF akan memproses ulang rekomendasi secara otomatis." : "Beri rating pada makanan yang pernah kamu coba, atau lihat rating yang sudah tersimpan."
+            : prototypeEnabled ? "Nilai makanan yang kamu kenal; Python UBCF akan memproses rating pada prototipe lokal." : "Beberapa rating dapat membantu menggambarkan seleramu, tetapi tidak menjamin rekomendasi langsung tersedia. Hasil muncul setelah admin menerbitkan rekomendasi untuk akunmu."}</p>
           <Link href={nextAction.href} className="mt-5 inline-flex min-h-10 items-center gap-2 rounded-xl bg-primary px-4 text-sm font-bold text-white hover:bg-primary-hover">{nextAction.label}<ArrowRight size={15} aria-hidden="true" /></Link>
           <p className="mb-0 mt-3 text-xs text-secondary">{foodCount} makanan aktif tersedia di katalog.</p>
         </Card>
@@ -57,7 +63,7 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
             <div><p className="m-0 text-xs font-bold uppercase tracking-[.14em] text-primary">REKOMENDASI</p><h2 className="mb-0 mt-3 text-lg font-bold text-gray-950">Status rekomendasi</h2></div>
             {recommendations.publishedAt && <Badge className="bg-green-50 text-green-800">Diperbarui {formatDate(recommendations.publishedAt)}</Badge>}
           </div>
-          <p className="mb-0 mt-3 text-sm leading-6 text-secondary">{recommendationMessage(recommendations.status, recommendations.recommendations.length)}</p>
+          <p className="mb-0 mt-3 text-sm leading-6 text-secondary">{recommendationMessage(recommendations.status, recommendations.recommendations.length, prototypeEnabled)}</p>
           <Link href="/recommendations" className="mt-5 inline-flex min-h-10 items-center gap-2 rounded-xl border border-border bg-white px-4 text-sm font-bold text-gray-800 hover:bg-gray-50">{recommendations.status === "READY" ? "Lihat rekomendasi" : "Lihat status rekomendasi"}<ArrowRight size={15} aria-hidden="true" /></Link>
         </Card>
       </div>
@@ -65,7 +71,7 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
       <div className="mt-6 grid gap-3 sm:grid-cols-3" aria-label="Alur FoodRec">
         <JourneyStep number="1" icon={UtensilsCrossed} title="Jelajahi makanan" description="Cari makanan yang menarik bagimu." />
         <JourneyStep number="2" icon={Star} title="Beri rating" description="Nilai makanan yang memang kamu kenal." />
-        <JourneyStep number="3" icon={Sparkles} title="Lihat rekomendasi" description="Cek hasil setelah admin menerbitkannya." />
+        <JourneyStep number="3" icon={Sparkles} title="Lihat rekomendasi" description={prototypeEnabled ? "Python UBCF memproses hasil otomatis pada prototipe lokal." : "Cek hasil setelah admin menerbitkannya."} />
       </div>
     </Container>;
   }
@@ -102,15 +108,19 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
         <div className="mx-auto mb-10 max-w-2xl text-center">
           <p className="text-xs font-bold uppercase tracking-[.18em] text-primary">CARA MENGGUNAKAN FOODREC</p>
           <h2 className="mt-3 text-3xl font-extrabold tracking-tight text-gray-950 sm:text-4xl">Mulai dari makanan yang kamu kenal</h2>
-          <p className="mt-4 text-sm leading-6 text-secondary sm:text-base">Rating tersimpan di akunmu. Admin mengolah data secara terpisah dan menerbitkan rekomendasi; menyimpan rating tidak otomatis menghasilkan rekomendasi.</p>
+          <p className="mt-4 text-sm leading-6 text-secondary sm:text-base">{prototypeEnabled
+            ? "Rating tersimpan di akunmu. Python UBCF memproses rekomendasi otomatis pada prototipe lokal; production tetap terkunci."
+            : "Rating tersimpan di akunmu. Admin mengolah data secara terpisah dan menerbitkan rekomendasi; menyimpan rating tidak otomatis menghasilkan rekomendasi."}</p>
         </div>
         <div className="grid gap-4 md:grid-cols-3">
           <JourneyStep number="1" icon={UtensilsCrossed} title="Jelajahi makanan" description="Cari nama atau kategori, lalu buka detail untuk melihat foto dan deskripsi." />
           <JourneyStep number="2" icon={Star} title="Beri rating 1–5" description="Nilai hanya makanan yang kamu kenal. Kamu bisa mengubah rating kapan saja." />
-          <JourneyStep number="3" icon={Database} title="Lihat rekomendasi" description="Admin memproses data secara terpisah. Hasil tampil setelah batch yang sesuai diterbitkan." />
+          <JourneyStep number="3" icon={Database} title="Lihat rekomendasi" description={prototypeEnabled ? "Sistem menghitung hasil Python setelah rating disimpan." : "Admin memproses data secara terpisah. Hasil tampil setelah batch yang sesuai diterbitkan."} />
         </div>
         <div className="mt-7 flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-orange-100 bg-soft p-5">
-          <p className="m-0 max-w-3xl text-sm leading-6 text-orange-950">FoodRec tidak menjanjikan rekomendasi langsung setelah rating disimpan. Rekomendasi bergantung pada hasil pemrosesan dan publikasi admin.</p>
+          <p className="m-0 max-w-3xl text-sm leading-6 text-orange-950">{prototypeEnabled
+            ? "Prototipe lokal memproses rekomendasi otomatis setelah rating disimpan; hasil bergantung pada dukungan data rating."
+            : "FoodRec tidak menjanjikan rekomendasi langsung setelah rating disimpan. Rekomendasi bergantung pada hasil pemrosesan dan publikasi admin."}</p>
           <Link href={!session ? "/register" : "/admin"} className="inline-flex min-h-10 items-center gap-2 rounded-xl bg-primary px-4 text-sm font-bold text-white hover:bg-primary-hover">{!session ? "Buat akun" : "Dashboard admin"}<ArrowUpRight size={16} aria-hidden="true" /></Link>
         </div>
       </Container>
@@ -118,14 +128,26 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
   </>;
 }
 
-function recommendationMessage(status: string, count: number) {
+function recommendationMessage(status: string, count: number, prototypeEnabled: boolean) {
   switch (status) {
-    case "READY": return `${count} rekomendasi tersedia untukmu. Buka halaman rekomendasi untuk melihat detailnya.`;
-    case "NO_RATINGS": return "Belum ada rating. Mulai dengan makanan yang pernah kamu coba; hasil tidak langsung tersedia setelah rating.";
-    case "NO_BATCH": return "Ratingmu tersimpan. Belum ada rekomendasi yang diterbitkan; kamu bisa tetap menjelajahi katalog.";
-    case "NOT_INCLUDED": return "Akunmu belum tercakup dalam hasil yang diterbitkan terakhir. Kamu tetap bisa menjelajahi makanan dan rating milikmu.";
+    case "READY": return prototypeEnabled
+      ? `${count} rekomendasi Python UBCF tersedia untukmu. Buka halaman rekomendasi untuk melihat detailnya.`
+      : `${count} rekomendasi tersedia untukmu. Buka halaman rekomendasi untuk melihat detailnya.`;
+    case "PROCESSING": return "Python UBCF sedang memproses ratingmu. Hasil akan diperbarui otomatis.";
+    case "PROCESSING_FAILED": return "Pemrosesan rekomendasi gagal. Periksa worker Python lokal lalu coba simpan ulang rating.";
+    case "NO_RATINGS": return prototypeEnabled
+      ? "Belum ada rating. Nilai makanan yang kamu kenal; Python UBCF memproses rating pada prototipe lokal."
+      : "Belum ada rating. Mulai dengan makanan yang pernah kamu coba; hasil tidak langsung tersedia setelah rating.";
+    case "NO_BATCH": return prototypeEnabled
+      ? "Ratingmu tersimpan. Sistem sedang menyiapkan pemrosesan otomatis pada prototipe lokal."
+      : "Ratingmu tersimpan. Belum ada rekomendasi yang diterbitkan; kamu bisa tetap menjelajahi katalog.";
+    case "NOT_INCLUDED": return prototypeEnabled
+      ? "Akunmu belum tercakup dalam hasil Python terbaru. Simpan perubahan rating untuk memicu pemrosesan ulang."
+      : "Akunmu belum tercakup dalam hasil yang diterbitkan terakhir. Kamu tetap bisa menjelajahi makanan dan rating milikmu.";
     case "ALL_RATED": return "Semua rekomendasi yang tersedia sudah kamu nilai. Rating tersebut tetap tersimpan di akunmu.";
     case "NO_AVAILABLE_FOODS": return "Belum ada rekomendasi aktif yang bisa ditampilkan. Coba jelajahi katalog makanan.";
+    case "NO_NEIGHBORS": return "Data belum memiliki pengguna dengan pola rating serupa.";
+    case "NO_PREDICTIONS": return "Tetangga serupa belum menilai makanan aktif yang belum kamu nilai.";
     default: return "Status rekomendasi belum dapat dimuat.";
   }
 }

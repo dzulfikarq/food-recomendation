@@ -70,6 +70,7 @@ class WorkerEngineTests(unittest.TestCase):
         }
         result = compute_result(ratings, parameters)
         self.assertEqual(result["recommendations"], [{"userId": 1, "foodId": 102, "rank": 1, "predictedRating": 4.0}])
+        self.assertEqual(result["userStatuses"], [{"userId": 1, "status": "READY"}])
         with self.assertRaisesRegex(WorkerError, "INVALID_JOB_PARAMETERS"):
             validate_parameters({**parameters, "targetUserIds": [-7001]})
 
@@ -84,6 +85,27 @@ class WorkerEngineTests(unittest.TestCase):
         }
         result = compute_result(ratings, parameters)
         self.assertEqual(result["recommendations"], [{"userId": 1, "foodId": 102, "rank": 1, "predictedRating": 4.0}])
+        self.assertEqual(result["userStatuses"], [{"userId": 1, "status": "READY"}])
+
+    def test_worker_reports_distinct_empty_outcomes_for_each_target(self):
+        cases = [
+            ({1: {101: 5}, 2: {102: 4}}, [101, 102], 1, [1], "NO_NEIGHBORS"),
+            ({1: {101: 5}, 2: {101: 4}}, [101, 102], 1, [1], "NO_PREDICTIONS"),
+            ({1: {101: 5}}, [101], 1, [1], "NO_CANDIDATES"),
+            ({1: {101: 5}}, [101, 102], 1, [9], "COLD_START"),
+        ]
+        for ratings, active_food_ids, k_neighbors, target_user_ids, expected_status in cases:
+            with self.subTest(status=expected_status):
+                result = compute_result(ratings, {
+                    "kNeighbors": k_neighbors,
+                    "topN": 2,
+                    "minCommonRatings": 1,
+                    "similarityStrategy": "overlap",
+                    "activeFoodIds": active_food_ids,
+                    "targetUserIds": target_user_ids,
+                })
+                self.assertEqual(result["recommendations"], [])
+                self.assertEqual(result["userStatuses"], [{"userId": target_user_ids[0], "status": expected_status}])
 
     def test_engine_runs_in_terminable_child_process(self):
         ratings = {1: {101: 5}, 2: {101: 5, 102: 4}}
@@ -106,6 +128,10 @@ class WorkerEngineTests(unittest.TestCase):
         job = {"id": "test-job", "attemptCount": 1, "leaseDurationSeconds": 60}
         result = _run_in_child(ratings, parameters, 10, api, job, {"workerId": "test-worker", "leaseToken": "test-token"}, threading.Event())
         self.assertEqual(result["recommendations"], [{"userId": 1, "foodId": 102, "rank": 1, "predictedRating": 4.0}])
+        self.assertEqual(result["userStatuses"], [
+            {"userId": 1, "status": "READY"},
+            {"userId": 2, "status": "NO_CANDIDATES"},
+        ])
 
     def test_explicitly_claimed_manual_job_runs_and_submits_unverified_candidate_rows(self):
         snapshot = b"user_id,food_id,rating\r\n1,101,5\r\n2,101,5\r\n2,102,4\r\n"
@@ -146,7 +172,13 @@ class WorkerEngineTests(unittest.TestCase):
             "leaseDurationSeconds": 60,
         }
         process_job(api, job, worker_id, threading.Event())
-        self.assertEqual(api.submitted, {"recommendations": [{"userId": 1, "foodId": 102, "rank": 1, "predictedRating": 4.0}]})
+        self.assertEqual(api.submitted, {
+            "recommendations": [{"userId": 1, "foodId": 102, "rank": 1, "predictedRating": 4.0}],
+            "userStatuses": [
+                {"userId": 1, "status": "READY"},
+                {"userId": 2, "status": "NO_CANDIDATES"},
+            ],
+        })
 
 
 if __name__ == "__main__":

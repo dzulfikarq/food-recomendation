@@ -5,7 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { readRatingExport, readRecommendationImport, removeRecommendationImport, saveRecommendationImport } from "@/lib/food/storage";
 import { RECOMMENDATION_PREVIEW_SIZE } from "@/lib/recommendations/constants";
 import { parseRatingSnapshotCsv, parseRecommendationCsv, type ParsedRecommendationRow, type RecommendationCsvError } from "@/lib/recommendations/csv";
-import type { RecommendationPreviewRow, RecommendationValidationReport } from "@/lib/recommendations/types";
+import { RECOMMENDATION_OUTCOME_STATUSES, type RecommendationOutcomeStatus, type RecommendationPreviewRow, type RecommendationValidationReport, type UserRecommendationStatus } from "@/lib/recommendations/types";
 
 type Database = Prisma.TransactionClient;
 
@@ -253,7 +253,7 @@ export async function getUserRecommendations(userId: number) {
   const ratingCount = await prisma.rating.count({ where: { userId } });
   if (!ratingCount) return { status: "NO_RATINGS" as const, publishedAt: null, recommendations: [] };
 
-  const batch = await prisma.recommendationBatch.findFirst({ where: { status: "PUBLISHED" }, orderBy: [{ publishedAt: "desc" }, { id: "desc" }], select: { id: true, publishedAt: true } });
+  const batch = await prisma.recommendationBatch.findFirst({ where: { status: "PUBLISHED" }, orderBy: [{ publishedAt: "desc" }, { id: "desc" }], select: { id: true, publishedAt: true, validationReport: true } });
   if (!batch) return { status: "NO_BATCH" as const, publishedAt: null, recommendations: [] };
 
   const rows = await prisma.recommendation.findMany({
@@ -261,11 +261,26 @@ export async function getUserRecommendations(userId: number) {
     orderBy: { rank: "asc" },
     select: { rank: true, foodId: true, food: { select: { id: true, name: true, category: true, description: true, imageUrl: true, isActive: true } } }
   });
-  if (!rows.length) return { status: "NOT_INCLUDED" as const, publishedAt: batch.publishedAt, recommendations: [] };
+  if (!rows.length) {
+    const status = publishedOutcomeForUser(batch.validationReport, userId);
+    return { status: status ?? "NOT_INCLUDED", publishedAt: batch.publishedAt, recommendations: [] };
+  }
   const activeRows = rows.filter(({ food }) => food.isActive);
   const ratedFoodIds = new Set((await prisma.rating.findMany({ where: { userId, foodId: { in: activeRows.map(({ foodId }) => foodId) } }, select: { foodId: true } })).map(({ foodId }) => foodId));
   const recommendations = activeRows.filter(({ foodId }) => !ratedFoodIds.has(foodId)).map(({ rank, food }) => ({ rank, food }));
   if (recommendations.length) return { status: "READY" as const, publishedAt: batch.publishedAt, recommendations };
   const allRecommendationsRated = activeRows.length === rows.length && activeRows.length > 0 && ratedFoodIds.size === activeRows.length;
   return { status: allRecommendationsRated ? "ALL_RATED" as const : "NO_AVAILABLE_FOODS" as const, publishedAt: batch.publishedAt, recommendations: [] };
+}
+
+function publishedOutcomeForUser(report: Prisma.JsonValue | null, userId: number): UserRecommendationStatus | null {
+  if (!report || typeof report !== "object" || Array.isArray(report)) return null;
+  const outcomes = report.userStatuses;
+  if (!Array.isArray(outcomes)) return null;
+  const outcome = outcomes.find((value) => value && typeof value === "object" && !Array.isArray(value) && value.userId === userId);
+  if (!outcome || typeof outcome !== "object" || Array.isArray(outcome) || typeof outcome.status !== "string") return null;
+  if (!RECOMMENDATION_OUTCOME_STATUSES.includes(outcome.status as RecommendationOutcomeStatus)) return null;
+  if (outcome.status === "NO_CANDIDATES") return "NO_AVAILABLE_FOODS";
+  if (outcome.status === "NO_NEIGHBORS" || outcome.status === "NO_PREDICTIONS") return outcome.status;
+  return null;
 }

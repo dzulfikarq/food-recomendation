@@ -3,6 +3,7 @@ import { createServer } from "node:http";
 import { randomUUID } from "node:crypto";
 import test from "node:test";
 import "@/tests/helpers/test-database";
+import { Prisma } from "@/generated/prisma/client";
 
 test("recommendation import validation, private user results, and concurrent atomic publication", async () => {
   Reflect.set(process.env, "NODE_ENV", "production");
@@ -196,6 +197,23 @@ test("recommendation import validation, private user results, and concurrent ato
     assert.deepEqual(userBData.recommendations.map((row: { food: { id: number } }) => row.food.id), [userBFood]);
     const userCData = (await (await api("/api/me/recommendations", "GET", undefined, userC.cookie)).json()).data;
     assert.equal(userCData.status, "NOT_INCLUDED");
+    const activePublishedBatch = await prisma.recommendationBatch.findFirstOrThrow({
+      where: { status: "PUBLISHED" },
+      orderBy: [{ publishedAt: "desc" }, { id: "desc" }],
+      select: { id: true, validationReport: true }
+    });
+    for (const status of ["NO_NEIGHBORS", "NO_PREDICTIONS"] as const) {
+      const report = activePublishedBatch.validationReport && typeof activePublishedBatch.validationReport === "object" && !Array.isArray(activePublishedBatch.validationReport)
+        ? activePublishedBatch.validationReport
+        : {};
+      await prisma.recommendationBatch.update({
+        where: { id: activePublishedBatch.id },
+        data: { validationReport: { ...report, userStatuses: [{ userId: userC.id, status }] } as Prisma.InputJsonValue }
+      });
+      const outcome = (await (await api("/api/me/recommendations", "GET", undefined, userC.cookie)).json()).data;
+      assert.equal(outcome.status, status);
+      assert.deepEqual(outcome.recommendations, []);
+    }
     await prisma.rating.create({ data: { userId: userA.id, foodId: userAFood, rating: 4 } });
     const allRated = (await (await api("/api/me/recommendations", "GET", undefined, userA.cookie)).json()).data;
     assert.equal(allRated.status, "ALL_RATED");

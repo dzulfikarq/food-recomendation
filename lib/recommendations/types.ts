@@ -1,5 +1,16 @@
 import type { RecommendationCsvError } from "@/lib/recommendations/csv";
 
+export const RECOMMENDATION_OUTCOME_STATUSES = [
+  "READY",
+  "COLD_START",
+  "NO_CANDIDATES",
+  "NO_NEIGHBORS",
+  "NO_PREDICTIONS"
+] as const;
+
+export type RecommendationOutcomeStatus = typeof RECOMMENDATION_OUTCOME_STATUSES[number];
+export type UserRecommendationStatus = "READY" | "NO_RATINGS" | "NO_BATCH" | "NOT_INCLUDED" | "ALL_RATED" | "NO_AVAILABLE_FOODS" | "NO_NEIGHBORS" | "NO_PREDICTIONS";
+
 export type RecommendationPreviewRow = {
   row: number;
   userId: number;
@@ -32,4 +43,5 @@ export type RecommendationValidationReport = {
   errors: RecommendationCsvError[];
   warnings: { code: string; message: string }[];
   preview: RecommendationPreviewRow[];
+  userStatuses?: { userId: number; status: RecommendationOutcomeStatus }[];
 };

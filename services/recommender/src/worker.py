@@ -118,14 +118,13 @@ def parse_snapshot(buffer: bytes, expected_checksum: str, expected_rows: int) ->
     return ratings
 
 
-def compute_result(ratings: Mapping[int, Mapping[int, int]], raw_parameters: object) -> dict[str, list[dict[str, int | float]]]:
+def compute_result(ratings: Mapping[int, Mapping[int, int]], raw_parameters: object) -> dict[str, list[dict[str, int | float | str]]]:
     parameters = validate_parameters(raw_parameters)
     rows: list[dict[str, int | float]] = []
+    user_statuses: list[dict[str, int | str]] = []
     target_users = parameters["targetUserIds"]
     targets = target_users if target_users is not None else (user_id for user_id in ratings if user_id > 0)
     for user_id in sorted(targets):
-        if user_id not in ratings:
-            continue
         result = recommend_for_user(
             user_id,
             ratings,
@@ -135,6 +134,7 @@ def compute_result(ratings: Mapping[int, Mapping[int, int]], raw_parameters: obj
             min_common_ratings=parameters["minCommonRatings"],
             similarity_strategy=parameters["similarityStrategy"],
         )
+        user_statuses.append({"userId": user_id, "status": result.status.value})
         rows.extend(
             {
                 "userId": user_id,
@@ -144,9 +144,9 @@ def compute_result(ratings: Mapping[int, Mapping[int, int]], raw_parameters: obj
             }
             for rank, item in enumerate(result.recommendations, start=1)
         )
-        if len(rows) > MAX_RESULT_ROWS:
+        if len(rows) > MAX_RESULT_ROWS or len(user_statuses) > MAX_RESULT_ROWS:
             raise WorkerError("RESULT_TOO_LARGE", retryable=False)
-    payload = {"recommendations": rows}
+    payload = {"recommendations": rows, "userStatuses": user_statuses}
     if len(json.dumps(payload, separators=(",", ":")).encode("utf-8")) > MAX_RESULT_BYTES:
         raise WorkerError("RESULT_TOO_LARGE", retryable=False)
     return payload
@@ -271,7 +271,7 @@ def _report_failure(client: ApiClient, job: dict[str, object], identity: Mapping
         LOG.warning("job=%s failure-report=%s", job["id"], error.code)
 
 
-def _run_in_child(ratings: dict[int, dict[int, int]], parameters: object, timeout_seconds: int, client: ApiClient, job: dict[str, object], identity: Mapping[str, str], stop_requested: Event) -> dict[str, list[dict[str, int | float]]] | None:
+def _run_in_child(ratings: dict[int, dict[int, int]], parameters: object, timeout_seconds: int, client: ApiClient, job: dict[str, object], identity: Mapping[str, str], stop_requested: Event) -> dict[str, list[dict[str, int | float | str]]] | None:
     context = multiprocessing.get_context("spawn")
     parent, child = context.Pipe(duplex=False)
     process = context.Process(target=_compute_child, args=(ratings, parameters, child), name=f"foodrec-job-{job['id']}")

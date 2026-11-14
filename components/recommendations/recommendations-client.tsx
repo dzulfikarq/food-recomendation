@@ -5,9 +5,10 @@ import Link from "next/link";
 import { ArrowRight, RefreshCw, Sparkles, Star } from "lucide-react";
 import { Button, Card, Container, PageHeader } from "@/components/ui";
 import { RecommendationCard, type RecommendationFood } from "@/components/recommendations/recommendation-card";
+import type { UserRecommendationStatus } from "@/lib/recommendations/types";
 
 type RecommendationResponse = {
-  status: "NO_RATINGS" | "NO_BATCH" | "NOT_INCLUDED" | "ALL_RATED" | "NO_AVAILABLE_FOODS" | "READY";
+  status: UserRecommendationStatus;
   publishedAt: string | null;
   recommendations: { rank: number; food: RecommendationFood }[];
 };
@@ -48,6 +49,8 @@ export function RecommendationsClient() {
     </>}
     {!loading && !error && data?.status === "NO_RATINGS" && <EmptyState icon="rating" title="Mulai dari makanan yang kamu kenal" description="Belum ada rating tersimpan. Jelajahi katalog dan nilai makanan yang pernah kamu coba. Rekomendasi baru bisa muncul setelah admin memproses dan menerbitkan hasil." action="Jelajahi makanan" href="/foods" />}
     {!loading && !error && data?.status === "NO_BATCH" && <EmptyState icon="recommendation" title="Belum ada rekomendasi yang diterbitkan" description="Ratingmu tetap tersimpan. Belum ada hasil rekomendasi aktif; menyimpan rating tidak otomatis memulai pemrosesan." action="Lihat rating saya" href="/my-ratings" secondaryAction="Jelajahi makanan" secondaryHref="/foods" />}
+    {!loading && !error && data?.status === "NO_NEIGHBORS" && <EmptyState icon="recommendation" title="Belum ada pengguna dengan pola rating serupa" description="Ratingmu tersimpan, tetapi data belum menemukan pengguna lain dengan rating yang cukup mirip untuk membentuk rekomendasi." action="Lihat rating saya" href="/my-ratings" secondaryAction="Jelajahi makanan" secondaryHref="/foods" />}
+    {!loading && !error && data?.status === "NO_PREDICTIONS" && <EmptyState icon="recommendation" title="Belum ada makanan yang dapat diprediksi" description="Pengguna dengan pola rating serupa belum memberi rating pada makanan aktif yang belum kamu nilai." action="Lihat rating saya" href="/my-ratings" secondaryAction="Jelajahi makanan" secondaryHref="/foods" />}
     {!loading && !error && data?.status === "NOT_INCLUDED" && <EmptyState icon="recommendation" title="Belum ada hasil untuk akunmu" description="Akunmu tidak tercakup dalam batch rekomendasi aktif. Kamu bisa menjelajahi katalog sambil menunggu admin menerbitkan batch yang mencakup akunmu." action="Jelajahi makanan" href="/foods" secondaryAction="Lihat rating saya" secondaryHref="/my-ratings" />}
     {!loading && !error && data?.status === "ALL_RATED" && <EmptyState icon="rating" title="Semua rekomendasi sudah kamu nilai" description="Semua makanan aktif dalam daftar rekomendasi sudah kamu beri rating. Nilaimu tersimpan di Rating Saya." action="Lihat rating saya" href="/my-ratings" secondaryAction="Jelajahi makanan" secondaryHref="/foods" />}
     {!loading && !error && data?.status === "NO_AVAILABLE_FOODS" && <EmptyState icon="recommendation" title="Belum ada rekomendasi aktif untuk ditampilkan" description="Makanan dalam hasil terakhir sudah dinilai atau tidak lagi aktif. Kamu tetap bisa menjelajahi katalog makanan aktif." action="Jelajahi makanan" href="/foods" secondaryAction="Lihat rating saya" secondaryHref="/my-ratings" />}

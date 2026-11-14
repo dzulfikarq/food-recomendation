@@ -4,6 +4,7 @@ import { MAX_JOB_RESULT_BYTES, MAX_JOB_RESULT_ROWS, submitRecommendationJobResul
 import { readJobJson } from "@/lib/recommendations/job-request";
 import { recommendationJobErrorResponse } from "@/lib/recommendations/job-api";
 import { authorizeWorker, workerIdentity } from "@/lib/recommendations/worker-auth";
+import { RECOMMENDATION_OUTCOME_STATUSES } from "@/lib/recommendations/types";
 
 const resultSchema = z.object({
   recommendations: z.array(z.object({
@@ -11,7 +12,11 @@ const resultSchema = z.object({
     foodId: z.number().int().positive().safe(),
     rank: z.number().int().positive().max(100),
     predictedRating: z.number().finite().min(1).max(5)
-  }).strict()).max(MAX_JOB_RESULT_ROWS)
+  }).strict()).max(MAX_JOB_RESULT_ROWS),
+  userStatuses: z.array(z.object({
+    userId: z.number().int().positive().safe(),
+    status: z.enum(RECOMMENDATION_OUTCOME_STATUSES)
+  }).strict()).max(MAX_JOB_RESULT_ROWS).optional()
 }).strict();
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -26,7 +31,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   const input = resultSchema.safeParse(parsedBody.value);
   if (!input.success) return apiError(422, "INVALID_RESULT", "Worker result payload is invalid.");
   try {
-    const result = await submitRecommendationJobResult(id, identity.workerId, identity.leaseToken, input.data.recommendations);
+    const result = await submitRecommendationJobResult(id, identity.workerId, identity.leaseToken, input.data.recommendations, input.data.userStatuses);
     return Response.json({ data: result }, { status: result.idempotent ? 200 : 201, headers: { "Cache-Control": "no-store" } });
   } catch (error) {
     return recommendationJobErrorResponse(error);

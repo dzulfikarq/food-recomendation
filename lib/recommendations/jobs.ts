@@ -4,6 +4,7 @@ import { Prisma, type RecommendationJobStatus } from "@/generated/prisma/client"
 import { prisma } from "@/lib/prisma";
 import { readRatingExport } from "@/lib/food/storage";
 import { parseRatingSnapshotCsv } from "@/lib/recommendations/csv";
+import { RECOMMENDATION_OUTCOME_STATUSES, type RecommendationOutcomeStatus } from "@/lib/recommendations/types";
 
 export const RECOMMENDATION_ENGINE_VERSION = "python-ubcf-v1";
 export const JOB_LEASE_SECONDS = 60;
@@ -28,6 +29,11 @@ export type JobRecommendation = {
   foodId: number;
   rank: number;
   predictedRating: number;
+};
+
+export type JobRecommendationOutcome = {
+  userId: number;
+  status: RecommendationOutcomeStatus;
 };
 
 export class RecommendationJobError extends Error {
@@ -365,20 +371,51 @@ function validateRecommendations(
   }
 }
 
-function recommendationPayload(recommendations: JobRecommendation[]) {
-  return recommendations.map(({ userId, foodId, rank, predictedRating }) => ({ userId, foodId, rank, predictedRating }));
+function validateRecommendationOutcomes(
+  outcomes: JobRecommendationOutcome[] | undefined,
+  recommendations: JobRecommendation[],
+  parameters: JobParameters,
+  sourceRatings: { userId: number; foodId: number; rating: number }[]
+) {
+  if (outcomes === undefined) return;
+  const expectedUsers = new Set(parameters.targetUserIds ?? sourceRatings.filter(({ userId }) => userId > 0).map(({ userId }) => userId));
+  if (outcomes.length !== expectedUsers.size || outcomes.length > MAX_JOB_RESULT_ROWS) {
+    throw new RecommendationJobError("RESULT_INVALID", 422, "Worker outcome statuses do not cover the job target users.");
+  }
+  const outcomesByUser = new Map<number, RecommendationOutcomeStatus>();
+  for (const outcome of outcomes) {
+    if (!expectedUsers.has(outcome.userId) || !RECOMMENDATION_OUTCOME_STATUSES.includes(outcome.status) || outcomesByUser.has(outcome.userId)) {
+      throw new RecommendationJobError("RESULT_INVALID", 422, "Worker outcome statuses contain an invalid or duplicate user.");
+    }
+    outcomesByUser.set(outcome.userId, outcome.status);
+  }
+  const usersWithRecommendations = new Set(recommendations.map(({ userId }) => userId));
+  for (const userId of expectedUsers) {
+    const hasRecommendations = usersWithRecommendations.has(userId);
+    if (!outcomesByUser.has(userId) || (outcomesByUser.get(userId) === "READY") !== hasRecommendations) {
+      throw new RecommendationJobError("RESULT_INVALID", 422, "Worker outcome status does not match its recommendation rows.");
+    }
+  }
+}
+
+function recommendationPayload(recommendations: JobRecommendation[], outcomes?: JobRecommendationOutcome[]) {
+  return {
+    recommendations: recommendations.map(({ userId, foodId, rank, predictedRating }) => ({ userId, foodId, rank, predictedRating })),
+    ...(outcomes === undefined ? {} : { userStatuses: outcomes.map(({ userId, status }) => ({ userId, status })) })
+  };
 }
 
 export async function submitRecommendationJobResult(
   jobId: string,
   workerId: string,
   leaseToken: string,
-  recommendations: JobRecommendation[]
+  recommendations: JobRecommendation[],
+  outcomes?: JobRecommendationOutcome[]
 ) {
   const snapshotJob = await findJobForWorker(jobId, workerId, leaseToken);
   const parameters = parametersFrom(snapshotJob.parameters);
-  const normalized = recommendationPayload(recommendations);
-  const serialized = JSON.stringify({ recommendations: normalized });
+  const normalized = recommendationPayload(recommendations, outcomes);
+  const serialized = JSON.stringify(normalized);
   if (Buffer.byteLength(serialized, "utf8") > MAX_JOB_RESULT_BYTES) {
     throw new RecommendationJobError("RESULT_TOO_LARGE", 413, "Worker result exceeds byte limit.");
   }
@@ -401,6 +438,7 @@ export async function submitRecommendationJobResult(
 
   const { ratings } = await verifySnapshot(snapshotJob.datasetExport);
   validateRecommendations(recommendations, parameters, ratings);
+  validateRecommendationOutcomes(outcomes, recommendations, parameters, ratings);
 
   return prisma.$transaction(async (tx) => {
     await tx.$queryRaw(Prisma.sql`SELECT "id" FROM "RecommendationJob" WHERE "id" = ${jobId}::uuid FOR UPDATE`);
@@ -430,11 +468,11 @@ export async function submitRecommendationJobResult(
         jobId,
         verificationStatus: "UNVERIFIED",
         checksum,
-        rowCount: normalized.length,
+        rowCount: normalized.recommendations.length,
         sourceRatingRevision: sourceRevision,
         currentRatingRevision: ratingState.currentRevision,
         isStale,
-        payload: { recommendations: normalized } as unknown as Prisma.InputJsonValue
+        payload: normalized as unknown as Prisma.InputJsonValue
       }
     });
     await tx.recommendationJob.update({

@@ -295,6 +295,9 @@ test("recommendation jobs enforce auth, atomic leases, retries, immutable snapsh
     assert.equal(oracleDatasetState.processedRevision, oracleRevision);
     const oracleRows = (oracleArtifact.payload as { recommendations: Array<{ userId: number; foodId: number; rank: number; predictedRating: number }> }).recommendations
       .filter((row) => row.userId === oracleTarget.id);
+    const oracleStatus = (oracleArtifact.payload as { userStatuses: Array<{ userId: number; status: string }> }).userStatuses
+      .find(({ userId }) => userId === oracleTarget.id);
+    assert.deepEqual(oracleStatus, { userId: oracleTarget.id, status: "READY" });
     assert.deepEqual(oracleRows.map(({ foodId, rank }) => [foodId, rank]), [[candidateC.id, 1], [candidateD.id, 2]]);
     for (const row of oracleRows) assert.ok(Math.abs(row.predictedRating - 77 / 18) < 1e-12);
     assert.equal(oracleRows.some(({ foodId }) => foodId === commonA.id || foodId === commonB.id), false);

@@ -29,25 +29,28 @@ export default async function MyRatingsPage({ searchParams }: { searchParams: Pr
 async function RatingsList({ userId, searchParams }: { userId: number; searchParams: Promise<{ page?: string }> }) {
   const query = myRatingsQuerySchema.safeParse(await searchParams);
   const pagination = query.success ? query.data : myRatingsQuerySchema.parse({});
+  const loadRatings = (page: number) => prisma.rating.findMany({
+    where: { userId },
+    orderBy: { updatedAt: "desc" },
+    skip: (page - 1) * pagination.pageSize,
+    take: pagination.pageSize,
+    select: { rating: true, updatedAt: true, food: { select: { id: true, foodCode: true, name: true, description: true, category: true, taste: true, origin: true, imageUrl: true, isActive: true } } }
+  });
   const [ratings, total, summary] = await Promise.all([
-    prisma.rating.findMany({
-      where: { userId },
-      orderBy: { updatedAt: "desc" },
-      skip: (pagination.page - 1) * pagination.pageSize,
-      take: pagination.pageSize,
-      select: { rating: true, updatedAt: true, food: { select: { id: true, foodCode: true, name: true, description: true, category: true, taste: true, origin: true, imageUrl: true, isActive: true } } }
-    }),
+    loadRatings(pagination.page),
     prisma.rating.count({ where: { userId } }),
     prisma.rating.aggregate({ where: { userId }, _avg: { rating: true } })
   ]);
   const totalPages = Math.max(1, Math.ceil(total / pagination.pageSize));
+  const page = Math.min(pagination.page, totalPages);
+  const pageRatings = page === pagination.page ? ratings : await loadRatings(page);
   const averageRating = summary._avg.rating === null
     ? null
     : new Intl.NumberFormat("id-ID", { minimumFractionDigits: 1, maximumFractionDigits: 1 }).format(summary._avg.rating);
 
   return <>
     <div className="mb-5 flex flex-wrap items-center justify-between gap-3"><p className="m-0 text-sm text-secondary"><strong className="text-gray-900">{total}</strong> rating tersimpan{averageRating && <> <span aria-hidden="true">·</span> Rata-rata <strong className="text-gray-900">{averageRating}/5</strong></>}</p><Link href="/foods" className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-border bg-white px-4 text-sm font-semibold text-gray-800 hover:bg-gray-50"><UtensilsCrossed size={15} aria-hidden="true" /> Kembali ke katalog</Link></div>
-    {ratings.length ? <div className="grid auto-rows-fr gap-4 sm:grid-cols-2 lg:grid-cols-3">{ratings.map(({ food, rating }) => <FoodCard key={food.id} food={{ ...food, rating }} canRate={food.isActive} role="USER" />)}</div> : <div className="grid min-h-64 place-items-center rounded-2xl border border-dashed border-border bg-white px-6 text-center"><div><Star className="mx-auto size-9 text-orange-300" aria-hidden="true" /><h2 className="mb-0 mt-3 text-lg font-bold text-gray-900">Belum ada rating</h2><p className="mb-0 mt-1 text-sm text-secondary">Nilai makanan yang kamu kenal untuk menyimpan preferensimu.</p><Link href="/foods" className="mt-4 inline-flex min-h-10 items-center gap-2 rounded-xl bg-primary px-4 text-sm font-bold text-white hover:bg-primary-hover">Jelajahi makanan <ArrowRight size={15} aria-hidden="true" /></Link></div></div>}
-    {totalPages > 1 && <nav aria-label="Pagination rating" className="mt-7 flex justify-end gap-2"><Link href={`/my-ratings?page=${Math.max(1, pagination.page - 1)}`} aria-disabled={pagination.page <= 1} tabIndex={pagination.page <= 1 ? -1 : undefined} className={`inline-flex min-h-10 items-center gap-1 rounded-lg border border-border px-3 text-xs font-semibold ${pagination.page <= 1 ? "pointer-events-none text-gray-300" : "text-gray-700 hover:bg-gray-50"}`}><ArrowLeft size={14} aria-hidden="true" /> Sebelumnya</Link><Link href={`/my-ratings?page=${Math.min(totalPages, pagination.page + 1)}`} aria-disabled={pagination.page >= totalPages} tabIndex={pagination.page >= totalPages ? -1 : undefined} className={`inline-flex min-h-10 items-center gap-1 rounded-lg border border-border px-3 text-xs font-semibold ${pagination.page >= totalPages ? "pointer-events-none text-gray-300" : "text-gray-700 hover:bg-gray-50"}`}>Berikutnya <ArrowRight size={14} aria-hidden="true" /></Link></nav>}
+    {pageRatings.length ? <div className="grid auto-rows-fr gap-4 sm:grid-cols-2 lg:grid-cols-3">{pageRatings.map(({ food, rating }) => <FoodCard key={food.id} food={{ ...food, rating }} canRate={food.isActive} role="USER" />)}</div> : <div className="grid min-h-64 place-items-center rounded-2xl border border-dashed border-border bg-white px-6 text-center"><div><Star className="mx-auto size-9 text-orange-300" aria-hidden="true" /><h2 className="mb-0 mt-3 text-lg font-bold text-gray-900">Belum ada rating</h2><p className="mb-0 mt-1 text-sm text-secondary">Nilai makanan yang kamu kenal untuk menyimpan preferensimu.</p><Link href="/foods" className="mt-4 inline-flex min-h-10 items-center gap-2 rounded-xl bg-primary px-4 text-sm font-bold text-white hover:bg-primary-hover">Jelajahi makanan <ArrowRight size={15} aria-hidden="true" /></Link></div></div>}
+    {totalPages > 1 && <nav aria-label="Pagination rating" className="mt-7 flex items-center justify-end gap-2"><Link href={`/my-ratings?page=${Math.max(1, page - 1)}`} aria-disabled={page <= 1} tabIndex={page <= 1 ? -1 : undefined} className={`inline-flex min-h-10 items-center gap-1 rounded-lg border border-border px-3 text-xs font-semibold ${page <= 1 ? "pointer-events-none text-gray-300" : "text-gray-700 hover:bg-gray-50"}`}><ArrowLeft size={14} aria-hidden="true" /> Sebelumnya</Link><span aria-current="page" className="px-2 text-xs text-secondary">Halaman {page} dari {totalPages}</span><Link href={`/my-ratings?page=${Math.min(totalPages, page + 1)}`} aria-disabled={page >= totalPages} tabIndex={page >= totalPages ? -1 : undefined} className={`inline-flex min-h-10 items-center gap-1 rounded-lg border border-border px-3 text-xs font-semibold ${page >= totalPages ? "pointer-events-none text-gray-300" : "text-gray-700 hover:bg-gray-50"}`}>Berikutnya <ArrowRight size={14} aria-hidden="true" /></Link></nav>}
   </>;
 }

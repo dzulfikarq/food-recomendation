@@ -58,7 +58,6 @@ test("USER rating lifecycle, private rating history, and ADMIN dataset CSV snaps
     } });
     foodId = food.id;
     const initialRevision = (await prisma.ratingDatasetState.findUniqueOrThrow({ where: { id: 1 } })).currentRevision;
-    const baselineRatingCount = await prisma.rating.count();
     const catalogBefore = await page(`/foods?search=${encodeURIComponent(food.foodCode)}`, userCookie);
     assert.equal(catalogBefore.status, 200);
     const catalogBeforeHtml = await catalogBefore.text();
@@ -105,6 +104,18 @@ test("USER rating lifecycle, private rating history, and ADMIN dataset CSV snaps
     assert.match(historyHtml, /Rata-rata[\s\S]{0,100}3,0/);
     assert.match(historyHtml, /Kembali ke katalog/);
 
+    const extraFoods = await prisma.food.findMany({ where: { isActive: true, id: { not: food.id } }, orderBy: { id: "asc" }, take: 20, select: { id: true } });
+    assert.equal(extraFoods.length, 20, "pagination fixture needs 20 additional active foods");
+    await prisma.rating.createMany({ data: extraFoods.map(({ id }) => ({ userId: user.id, foodId: id, rating: 4 })) });
+    const firstRatingsPage = await (await page("/my-ratings", userCookie)).text();
+    assert.match(firstRatingsPage, /href="\/my-ratings\?page=2"/);
+    const outOfRangeRatingsPage = await (await page("/my-ratings?page=999999", userCookie)).text();
+    assert.match(outOfRangeRatingsPage, /aria-label="Pagination rating"/);
+    assert.match(outOfRangeRatingsPage, /aria-current="page"/);
+    assert.match(outOfRangeRatingsPage, /Halaman/);
+    assert.match(outOfRangeRatingsPage, /href="\/my-ratings\?page=1"/);
+    assert.doesNotMatch(outOfRangeRatingsPage, /page=999998/);
+
     const adminLogin = await api("/api/auth/sign-in/email", "POST", { email: env.ADMIN_EMAIL, password: env.ADMIN_PASSWORD });
     assert.equal(adminLogin.status, 200);
     const adminCookie = cookiesFrom(adminLogin);
@@ -114,6 +125,7 @@ test("USER rating lifecycle, private rating history, and ADMIN dataset CSV snaps
     assert.equal((await api("/api/admin/rating-datasets", "GET", undefined, adminCookie)).status, 200);
 
     const snapshotRevision = (await prisma.ratingDatasetState.findUniqueOrThrow({ where: { id: 1 } })).currentRevision;
+    const expectedSnapshotRowCount = await prisma.rating.count();
     const [exportResponse, concurrentUpdate] = await Promise.all([
       api("/api/admin/rating-datasets", "POST", undefined, adminCookie),
       api(`/api/foods/${food.id}/rating`, "PUT", { rating: 2 }, userCookie)
@@ -121,7 +133,7 @@ test("USER rating lifecycle, private rating history, and ADMIN dataset CSV snaps
     assert.equal(concurrentUpdate.status, 200);
     assert.equal(exportResponse.status, 201, await exportResponse.clone().text());
     const datasetExport = (await exportResponse.json()).data;
-    assert.equal(datasetExport.rowCount, baselineRatingCount + 1);
+    assert.equal(datasetExport.rowCount, expectedSnapshotRowCount);
     assert.ok([snapshotRevision, snapshotRevision + BigInt(1)].map(String).includes(datasetExport.ratingRevision));
     assert.equal("filePath" in datasetExport, false);
     const filteredSnapshots = await page(`/admin/ratings?search=${encodeURIComponent(datasetExport.filename)}&page=999999`, adminCookie);
@@ -144,8 +156,10 @@ test("USER rating lifecycle, private rating history, and ADMIN dataset CSV snaps
     assert.equal(userDownload.status, 403);
     await assert.rejects(prisma.datasetExport.update({ where: { id: datasetExport.id }, data: { filename: "changed.csv" } }));
   } finally {
+    if (userId !== undefined) {
+      await prisma.rating.deleteMany({ where: { userId } });
+    }
     if (userId !== undefined && foodId !== undefined) {
-      await prisma.rating.deleteMany({ where: { userId, foodId } });
       await prisma.food.updateMany({ where: { id: foodId }, data: { firstUsedAt: null } });
     }
     if (userId !== undefined) await prisma.user.delete({ where: { id: userId } });

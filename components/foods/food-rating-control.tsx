@@ -60,7 +60,7 @@ export function FoodRatingControl({ foodId, foodName, currentRating, canRate, ro
 
   return (
     <fieldset className="min-w-0 border-t border-border pt-4" aria-describedby={`rating-scale-${foodId}`}>
-      <legend className="mb-2 block min-h-8 w-full line-clamp-2 text-xs font-semibold text-gray-800">{savedRating ? `Rating kamu untuk ${foodName}: ${savedRating}/5` : `Seberapa kamu menyukai ${foodName}?`}</legend>
+      <legend className="mb-2 block min-h-8 w-full line-clamp-2 text-xs font-semibold text-gray-800">{savedRating ? <>Rating kamu untuk <span className="capitalize">{foodName}</span>: {savedRating}/5</> : <>Seberapa kamu menyukai <span className="capitalize">{foodName}</span>?</>}</legend>
       <div className="flex flex-col items-start gap-2">
         <div className="flex items-center gap-1 rounded-xl bg-amber-50/70 p-1">
           {[1, 2, 3, 4, 5].map((score) => <label key={score} title={`${score} dari 5`} className="cursor-pointer rounded-lg p-1 hover:bg-amber-50 has-[:disabled]:cursor-not-allowed">

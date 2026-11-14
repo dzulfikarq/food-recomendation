@@ -5,6 +5,8 @@ import { readJobJson } from "@/lib/recommendations/job-request";
 import { recommendationJobErrorResponse } from "@/lib/recommendations/job-api";
 import { authorizeWorker, workerIdentity } from "@/lib/recommendations/worker-auth";
 import { RECOMMENDATION_OUTCOME_STATUSES } from "@/lib/recommendations/types";
+import { RecommendationArtifactPromotionError } from "@/lib/recommendations/artifact-promotion";
+import { publishTestPrototypeArtifactIfQueued, testPrototypeAutomationEnabled } from "@/lib/recommendations/test-prototype";
 
 const resultSchema = z.object({
   recommendations: z.array(z.object({
@@ -32,7 +34,18 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   if (!input.success) return apiError(422, "INVALID_RESULT", "Worker result payload is invalid.");
   try {
     const result = await submitRecommendationJobResult(id, identity.workerId, identity.leaseToken, input.data.recommendations, input.data.userStatuses);
-    return Response.json({ data: result }, { status: result.idempotent ? 200 : 201, headers: { "Cache-Control": "no-store" } });
+    let prototypePublication = null;
+    if (testPrototypeAutomationEnabled()) {
+      try {
+        prototypePublication = await publishTestPrototypeArtifactIfQueued(id);
+      } catch (error) {
+        if (!(error instanceof RecommendationArtifactPromotionError)) throw error;
+        prototypePublication = { status: "REJECTED" as const, reason: error.code };
+      }
+    }
+    return Response.json({
+      data: { ...result, ...(prototypePublication ? { prototypePublication } : {}) }
+    }, { status: result.idempotent ? 200 : 201, headers: { "Cache-Control": "no-store" } });
   } catch (error) {
     return recommendationJobErrorResponse(error);
   }

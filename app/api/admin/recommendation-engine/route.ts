@@ -23,9 +23,9 @@ function configurationResponse(config: Awaited<ReturnType<typeof prisma.recommen
     lastSchedulerReason: config.lastSchedulerReason,
     parameterDefaultsAreResearchOptimized: false,
     automationBlockedReasons: [
-      "AUTO_PROCESSING_DISABLED",
-      "MATHEMATICAL_PARITY_PENDING_VALIDATION",
-      "AUTOMATIC_PUBLICATION_DISABLED"
+      "PRODUCTION_AUTO_PROCESSING_DISABLED",
+      "RESEARCH_QUALITY_VALIDATION_PENDING",
+      "PRODUCTION_PUBLICATION_DISABLED"
     ]
   };
 }
@@ -81,7 +81,7 @@ export async function GET(request: Request) {
       validationGate: {
         status: config.validationStatus,
         open: false,
-        reasons: ["MATHEMATICAL_PARITY_PENDING_VALIDATION", "AUTO_PROCESSING_DISABLED", "AUTOMATIC_PUBLICATION_DISABLED"]
+        reasons: ["RESEARCH_QUALITY_VALIDATION_PENDING", "PRODUCTION_AUTO_PROCESSING_DISABLED", "PRODUCTION_PUBLICATION_DISABLED"]
       },
       dataset: {
         currentRevision: dataset.currentRevision.toString(),

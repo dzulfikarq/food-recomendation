@@ -4,21 +4,21 @@ Status fitur menggunakan **Implemented** (kode tersedia), **Tested** (automated/
 
 ## 1. Product Overview
 
-FoodRec adalah aplikasi web untuk menjelajahi makanan, menyimpan preferensi pengguna, dan menyajikan rekomendasi yang telah diterbitkan. Website menyimpan akun, katalog, rating, snapshot, batch, riwayat audit, antrean recommendation job durable, dan artifact staging yang belum terverifikasi. Altair manual tetap menjadi jalur riset/publikasi; Python worker dapat menjalankan job manual terpilih ke staging. Phase E menambahkan dashboard monitoring operasional dan panduan enam tahap dengan memakai API yang ada; otomatisasi tetap DB-locked sampai mathematical parity tervalidasi.
+FoodRec adalah aplikasi web untuk menjelajahi makanan, menyimpan preferensi pengguna, dan menyajikan rekomendasi Python UBCF. Website menyimpan akun, katalog, rating, snapshot, batch, riwayat audit, antrean recommendation job durable, dan artifact staging yang belum terverifikasi. CSV Admin/Altair tetap tersedia sebagai jalur tambahan. Rating-triggered automation hanya aktif di prototipe lokal `_test`; production gates tetap terkunci.
 
-Implementasi mencakup foundation, autentikasi, Food Management, rating, snapshot CSV, validasi hasil Altair, manajemen batch, publikasi, dan halaman rekomendasi USER. Pemrosesan Altair tetap manual; kesesuaian dengan file penelitian asli dan review visual lintas perangkat masih perlu divalidasi.
+Implementasi mencakup foundation, autentikasi, Food Management, rating, snapshot CSV, Python UBCF worker, Admin CSV import/publication, dan halaman rekomendasi USER. Altair/manual workflow tetap tambahan; kesesuaian dengan file penelitian asli dan review visual lintas perangkat masih perlu divalidasi.
 
 - **Implemented:** foundation/auth, Food Management, rating/export, recommendation import/validation/publish, batch history, dan halaman rekomendasi personal.
-- **Tested:** 15 npm unit tests, 24 Python tests, 6 PostgreSQL integration suites, and 4 real-browser E2E journeys on isolated `_test` databases; production database/storage/security/performance and manual assistive-technology review remain separate.
-- **Pending Validation:** round-trip dengan file penelitian Altair nyata dan production operations.
+- **Tested:** 29 npm unit tests, 57 Python tests, 7 PostgreSQL integration suites, and 6 real-browser E2E journeys on fresh isolated `_test` databases; production database/storage/security/performance and manual assistive-technology review remain separate.
+- **Pending Validation:** confirmatory recommendation-quality evaluation, real Altair export round-trip, and production operations.
 
 ## FoodRec V2 status
 
-Phase C menyediakan antrean PostgreSQL, internal API terautentikasi, dan Python worker. Phase D menambahkan revision rating durable, snapshot konsisten, scheduler worker, dedupe, heartbeat, dan monitoring API. Phase E menampilkan status aktual dan enam langkah workflow manual. Phase F QA memverifikasi browser Guest/USER/Admin, workflow CSV, security gates, serta real Python worker pada PostgreSQL `_test`. DB checks/trigger tetap memaksa auto-processing/publication OFF, `PENDING_VALIDATION`, dan menolak automatic jobs. Job manual menghasilkan artifact `UNVERIFIED`; `SUCCEEDED` hanya berarti komputasi selesai. Phase B: screenshot 43 rating **MATCHED OUTPUT**; Top-1 train-264 **MISMATCH**. Paritas matematis tetap **Pending Validation**. Lihat [`RECOMMENDATION_ENGINE_VALIDATION.md`](RECOMMENDATION_ENGINE_VALIDATION.md) dan [`PHASE_F_VERIFICATION.md`](PHASE_F_VERIFICATION.md).
+Phase C–F menyediakan PostgreSQL queue, authenticated Python worker, revision tracking, monitoring, dan CSV Admin. Prototipe lokal menambahkan rating → `TEST_PROTOTYPE` job → worker → technical re-verification → test-only publication. DB checks/trigger tetap memaksa production auto-processing/publication OFF, status `PENDING_VALIDATION`, dan menolak `AUTO_RATING_CHANGE`. Artifact DB tetap `UNVERIFIED`; `SUCCEEDED` berarti komputasi selesai. Historical Altair comparisons (43-row 5/5 screenshot match; train-264 Top-1 0/22 native match) remain separate from recommendation quality. Lihat [`RECOMMENDATION_ENGINE_VALIDATION.md`](RECOMMENDATION_ENGINE_VALIDATION.md).
 
 ## 2. Problem Statement
 
-Pengguna membutuhkan cara menemukan makanan sesuai preferensi, sementara pola rating dapat memberi sinyal preferensi kolektif. FoodRec menyediakan katalog aktif dan rating eksplisit. Admin tetap dapat memproses dataset di Altair dan menerbitkan hasil; Phase C juga dapat menghitung hasil Python ke staging, namun tidak memublikasikannya.
+Pengguna membutuhkan cara menemukan makanan sesuai preferensi, sementara pola rating dapat memberi sinyal preferensi kolektif. FoodRec menyediakan katalog aktif, rating eksplisit, dan Python UBCF sebagai recommender utama. Admin CSV manual tetap tersedia sebagai tambahan.
 
 ## 3. Product Goals
 
@@ -108,7 +108,7 @@ Guest/USER membuka `/foods` → hanya Food aktif ditampilkan → USER memilih ra
 
 ### Penerimaan rekomendasi — Implemented
 
-Setelah batch hasil Altair tervalidasi dan dipublikasikan, USER melihat hasil miliknya di `/recommendations`. Endpoint mengambil identity dari session, mengecualikan hasil yang kini telah dinilai dan Food nonaktif. Empty state membedakan belum ada rating, belum ada batch, akun tidak tercakup, seluruh kandidat sudah dinilai, dan tidak ada makanan aktif. Menyimpan rating tidak menghitung ulang UBCF atau menjamin hasil otomatis.
+Setelah batch dipublikasikan, USER melihat hasil miliknya di `/recommendations`. Endpoint mengambil identity dari session, mengecualikan hasil yang kini telah dinilai dan Food nonaktif. Empty state membedakan belum ada rating, belum ada batch, akun tidak tercakup, seluruh kandidat sudah dinilai, dan tidak ada makanan aktif. Hanya E2E `_test` yang otomatis antre dan menerbitkan hasil; environment lain tetap manual.
 
 ## 7. Admin Flows
 
@@ -127,11 +127,11 @@ Alur berikut **Implemented**:
 
 ## 8. Recommendation System
 
-- **Kandidat metodologi, belum disetujui:** explicit-rating UBCF karena produk mengumpulkan preferensi 1–5. Python baseline menghitung raw-rating cosine pada makanan co-rated, memilih tetangga positive-similarity, lalu memprediksi rating sebagai similarity-weighted average. Bahan tinjauan pembimbing ada di [`RESEARCH_METHODOLOGY_PROPOSAL.md`](RESEARCH_METHODOLOGY_PROPOSAL.md); detail teknis dan acceptance criteria ada di [`RECOMMENDATION_METHODOLOGY_DECISION.md`](RECOMMENDATION_METHODOLOGY_DECISION.md). Jangan menyebut kandidat sebagai metode skripsi final sebelum disetujui.
+- **Metode aplikasi utama:** explicit-rating UBCF Python karena produk mengumpulkan preferensi 1–5. Raw-rating cosine memakai makanan co-rated, memilih tetangga positive-similarity, lalu memprediksi rating sebagai similarity-weighted average. Persetujuan skripsi dan validasi kualitas tetap pending; detail ada di [`RECOMMENDATION_METHODOLOGY_DECISION.md`](RECOMMENDATION_METHODOLOGY_DECISION.md).
 - Altair workflows yang tersedia menghasilkan ranking Item Recommendation; source publik mengindikasikan positive-only binary feedback. Tidak tersedia workflow/output Altair explicit-rating prediction yang terverifikasi. Jangan mengklaim parity Python–Altair untuk prediksi rating.
-- Python engine dapat dijalankan worker existing untuk job manual terkontrol; hasil staging belum tervalidasi dan tidak masuk jalur publikasi.
-- Website menyimpan rating revisions, snapshots, parameters, Altair result CSV checksum, validation report, Recommendation rows, publication history, job leases, and `UNVERIFIED` artifacts. Tidak ada rekomendasi dihitung di rating request.
-- Config defaults `autoProcessingEnabled=false`, `kNeighbors=3`, `topN=5`, interval 30 menit, engine `python-ubcf-v1`, validation `PENDING_VALIDATION`; nilai parameter bukan hasil optimasi penelitian. Database constraints mencegah Admin/API mengubah validation gate atau mengaktifkan processing/publication.
+- Python engine berjalan melalui worker existing. Artifact biasa tetap staging; hanya prototipe E2E `_test` yang memverifikasi ulang dan menerbitkan batch demo.
+- Website menyimpan rating revisions, snapshots, parameters, result CSV checksum, validation report, Recommendation rows, publication history, job leases, and `UNVERIFIED` artifacts. Di luar env E2E `_test`, rating request tidak menghitung rekomendasi.
+- Config defaults `autoProcessingEnabled=false`, `kNeighbors=3`, `topN=5`, interval 30 menit, engine `python-ubcf-v1`, validation `PENDING_VALIDATION`; nilai parameter bukan hasil optimasi penelitian. Database constraints keep production gate closed; parity Altair is not a Python prototype requirement.
 - Persetujuan explicit-rating vs implicit, perlakuan rating ordinal, minimum overlap, centering/normalisasi, parameter `kNeighbors`/`topN`, score scale, coverage/error/ranking thresholds dan protokol evaluasi **Pending Validation**. Nilai operasional bukan hasil optimasi penelitian.
 
 ## 9. CSV Integration

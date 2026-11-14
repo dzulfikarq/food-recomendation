@@ -1,6 +1,7 @@
 import { apiError, parseFoodId, requireUserRequest, validationError } from "@/lib/food/http";
 import { ratingInputSchema } from "@/lib/food/schemas";
 import { prisma } from "@/lib/prisma";
+import { enqueueTestPrototypeRecommendationJob, testPrototypeAutomationEnabled } from "@/lib/recommendations/test-prototype";
 
 export async function PUT(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const authorization = await requireUserRequest(request);
@@ -37,7 +38,24 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
 
     if (result.status === "NOT_FOUND") return apiError(404, "FOOD_NOT_FOUND", "Makanan tidak ditemukan.");
     if (result.status === "INACTIVE") return apiError(409, "FOOD_INACTIVE", "Makanan nonaktif tidak dapat dinilai.");
-    return Response.json({ data: { foodId, rating: result.rating.rating, createdAt: result.rating.createdAt, updatedAt: result.rating.updatedAt }, message: "Rating tersimpan." });
+    let recommendationJobId: string | null = null;
+    if (testPrototypeAutomationEnabled()) {
+      try {
+        recommendationJobId = (await enqueueTestPrototypeRecommendationJob()).jobId;
+      } catch {
+        return apiError(503, "RECOMMENDATION_QUEUE_FAILED", "Rating tersimpan, tetapi job rekomendasi tidak dapat diantrekan.");
+      }
+    }
+    return Response.json({
+      data: {
+        foodId,
+        rating: result.rating.rating,
+        createdAt: result.rating.createdAt,
+        updatedAt: result.rating.updatedAt,
+        ...(recommendationJobId ? { recommendationJobId } : {})
+      },
+      message: "Rating tersimpan."
+    });
   } catch {
     return apiError(500, "RATING_SAVE_FAILED", "Rating tidak dapat disimpan.");
   }

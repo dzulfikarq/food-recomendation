@@ -46,7 +46,7 @@ function digest(buffer: Buffer | string) {
   return createHash("sha256").update(buffer).digest("hex");
 }
 
-function parametersFrom(value: Prisma.JsonValue): JobParameters {
+export function recommendationJobParameters(value: Prisma.JsonValue): JobParameters {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     throw new RecommendationJobError("INVALID_JOB_PARAMETERS", 500, "Job parameters are invalid.");
   }
@@ -76,7 +76,7 @@ function parametersFrom(value: Prisma.JsonValue): JobParameters {
   };
 }
 
-async function verifySnapshot(dataset: { filePath: string; fileChecksum: string; rowCount: number }) {
+export async function verifyRecommendationSnapshot(dataset: { filePath: string; fileChecksum: string; rowCount: number }) {
   let buffer: Buffer;
   try {
     buffer = await readRatingExport(dataset.filePath);
@@ -133,7 +133,7 @@ export async function createRecommendationJob(input: {
 
   const dataset = await prisma.datasetExport.findUnique({ where: { id: input.datasetExportId } });
   if (!dataset) throw new RecommendationJobError("DATASET_NOT_FOUND", 404, "Rating snapshot not found.");
-  await verifySnapshot(dataset);
+  await verifyRecommendationSnapshot(dataset);
   const activeCatalog = await prisma.foodCatalogImport.findFirst({ where: { sourceDataset: "FOODCOM", isActive: true }, select: { id: true } });
   const activeFoods = await prisma.food.findMany({
     where: activeCatalog ? { isActive: true, sourceDataset: "FOODCOM", sourceImportId: activeCatalog.id } : { isActive: true },
@@ -195,7 +195,7 @@ export async function createRecommendationJob(input: {
 
 function sameRequestedParameters(value: Prisma.JsonValue, kNeighbors: number, topN: number) {
   try {
-    const parameters = parametersFrom(value);
+    const parameters = recommendationJobParameters(value);
     return parameters.kNeighbors === kNeighbors && parameters.topN === topN;
   } catch {
     return false;
@@ -276,7 +276,7 @@ export async function claimRecommendationJob(workerId: string, engineVersion = R
     `);
     const job = claimed[0];
     if (!job) return null;
-    return { ...job, parameters: parametersFrom(job.parameters), leaseDurationSeconds: JOB_LEASE_SECONDS };
+    return { ...job, parameters: recommendationJobParameters(job.parameters), leaseDurationSeconds: JOB_LEASE_SECONDS };
   });
 }
 
@@ -301,7 +301,7 @@ function requireActiveLease(job: { status: RecommendationJobStatus; leaseExpires
 export async function getRecommendationJobSnapshot(jobId: string, workerId: string, leaseToken: string) {
   const job = await findJobForWorker(jobId, workerId, leaseToken);
   requireActiveLease(job, new Date());
-  const { buffer } = await verifySnapshot(job.datasetExport);
+  const { buffer } = await verifyRecommendationSnapshot(job.datasetExport);
   return { buffer, checksum: job.datasetExport.fileChecksum, filename: job.datasetExport.filename };
 }
 
@@ -413,7 +413,7 @@ export async function submitRecommendationJobResult(
   outcomes?: JobRecommendationOutcome[]
 ) {
   const snapshotJob = await findJobForWorker(jobId, workerId, leaseToken);
-  const parameters = parametersFrom(snapshotJob.parameters);
+  const parameters = recommendationJobParameters(snapshotJob.parameters);
   const normalized = recommendationPayload(recommendations, outcomes);
   const serialized = JSON.stringify(normalized);
   if (Buffer.byteLength(serialized, "utf8") > MAX_JOB_RESULT_BYTES) {
@@ -436,7 +436,7 @@ export async function submitRecommendationJobResult(
     });
   }
 
-  const { ratings } = await verifySnapshot(snapshotJob.datasetExport);
+  const { ratings } = await verifyRecommendationSnapshot(snapshotJob.datasetExport);
   validateRecommendations(recommendations, parameters, ratings);
   validateRecommendationOutcomes(outcomes, recommendations, parameters, ratings);
 

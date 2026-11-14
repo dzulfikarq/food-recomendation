@@ -44,4 +44,18 @@ export type RecommendationValidationReport = {
   warnings: { code: string; message: string }[];
   preview: RecommendationPreviewRow[];
   userStatuses?: { userId: number; status: RecommendationOutcomeStatus }[];
+  artifactVerification?: {
+    status: "REVERIFIED_FOR_LOCAL_PROTOTYPE";
+    storedArtifactStatus: string;
+    artifactId: string;
+    artifactChecksum: string;
+    jobId: string;
+    engineVersion: string;
+    datasetRevision: string;
+    currentRevision: string;
+    parameters: { kNeighbors: number; topN: number; minCommonRatings: number; similarityStrategy: "overlap" };
+    cohortUserCount: number;
+    candidateFoodCount: number;
+    outcomeCounts: Record<RecommendationOutcomeStatus, number>;
+  };
 };

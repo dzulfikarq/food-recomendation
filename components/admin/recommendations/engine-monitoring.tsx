@@ -75,6 +75,12 @@ function jobStatusLabel(status: string) {
   }
 }
 
+function jobTriggerLabel(trigger: string) {
+  if (trigger === "TEST_PROTOTYPE") return "Prototipe lokal (_test)";
+  if (trigger === "AUTO_RATING_CHANGE") return "Otomatis (terkunci)";
+  return "Manual";
+}
+
 function StatusBadge({ children, tone = "neutral" }: { children: string; tone?: "neutral" | "good" | "warning" | "error" }) {
   const styles = {
     neutral: "bg-gray-100 text-gray-700",
@@ -132,10 +138,10 @@ export function EngineMonitoring({ mode = "full" }: { mode?: "summary" | "full" 
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
           <Metric label="Dataset" value={data.dataset.dirty ? "Perlu diproses ulang" : "Tidak ada perubahan baru"} detail={`Revision ${data.dataset.currentRevision} · diproses sampai ${data.dataset.processedRevision}`} />
           <Metric label="Validation gate" value={data.validationGate.status} detail="Pemrosesan otomatis OFF" />
-          <Metric label="Job terakhir" value={latestJob ? jobStatusLabel(latestJob.status) : "Belum ada job"} detail={latestJob ? `${latestJob.trigger === "AUTO_RATING_CHANGE" ? "Otomatis (terkunci)" : "Manual"} · #${latestJob.id}` : undefined} />
+          <Metric label="Job terakhir" value={latestJob ? jobStatusLabel(latestJob.status) : "Belum ada job"} detail={latestJob ? `${jobTriggerLabel(latestJob.trigger)} · #${latestJob.id}` : undefined} />
           <Metric label="Worker terakhir" value={latestWorker ? latestWorker.online ? "Online" : "Offline" : "Belum terdeteksi"} detail={latestWorker ? `${latestWorker.workerId} · ${formatDate(latestWorker.lastSeenAt)}` : "Menunggu heartbeat worker"} />
         </div>
-        <Alert variant="info" className="mt-3">Pemrosesan otomatis belum tersedia karena algoritma masih menjalani validasi terhadap hasil penelitian Altair.</Alert>
+        <Alert variant="info" className="mt-3">Otomatisasi production tetap OFF sambil menunggu evaluasi kualitas penelitian dan persetujuan terpisah. Demo Python otomatis hanya berjalan pada prototipe lokal `_test`.</Alert>
       </> : <>
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
           <Metric label="Engine" value={data.configuration.engineVersion} detail={latestWorker ? `Worker ${latestWorker.online ? "terdeteksi" : "terakhir terlihat"}: ${latestWorker.workerId}` : "Worker belum terdeteksi"} />
@@ -143,12 +149,12 @@ export function EngineMonitoring({ mode = "full" }: { mode?: "summary" | "full" 
           <Metric label="Validation status" value={data.configuration.validationStatus} detail={data.validationGate.open ? "Gate terbuka" : "Gate terkunci"} />
           <Metric label="Parameter tersimpan" value={`k=${data.configuration.kNeighbors} · Top-${data.configuration.topN}`} detail={`Interval pemeriksaan ${data.configuration.scheduleIntervalMinutes} menit · bukan hasil optimasi penelitian`} />
           <Metric label="Revision dataset" value={data.dataset.currentRevision} detail={`${data.dataset.dirty ? "Dirty · perlu diproses" : "Clean"} · processed ${data.dataset.processedRevision}`} />
-          <Metric label="Job terakhir" value={latestJob ? jobStatusLabel(latestJob.status) : "Belum ada job"} detail={latestJob ? `#${latestJob.id} · ${latestJob.trigger === "AUTO_RATING_CHANGE" ? "Otomatis (terkunci)" : "Manual"}` : "Belum ada job tercatat"} />
+          <Metric label="Job terakhir" value={latestJob ? jobStatusLabel(latestJob.status) : "Belum ada job"} detail={latestJob ? `#${latestJob.id} · ${jobTriggerLabel(latestJob.trigger)}` : "Belum ada job tercatat"} />
           <Metric label="Batch published terakhir" value={data.lastPublishedBatch ? `#${data.lastPublishedBatch.id}` : "Belum ada"} detail={formatDate(data.lastPublishedBatch?.publishedAt ?? null)} />
           <Metric label="Komputasi sukses terakhir" value={formatDate(data.configuration.lastSuccessfulProcessingAt)} detail="Selesai dihitung; bukan bukti verifikasi atau publikasi." />
           <Metric label="Heartbeat worker terakhir" value={latestWorker ? latestWorker.online ? "Online" : "Offline" : "Belum terdeteksi"} detail={latestWorker ? `${latestWorker.workerId} · ${latestWorker.engineVersion} · ${formatDate(latestWorker.lastSeenAt)}` : "Belum ada heartbeat tersimpan"} />
         </div>
-        <Alert variant="info" className="mt-4">Pemrosesan otomatis belum tersedia karena algoritma masih menjalani validasi terhadap hasil penelitian Altair. Job manual hanya untuk pengujian; hasil Python tetap <code>UNVERIFIED</code> dan tidak otomatis tampil kepada pengguna.</Alert>
+        <Alert variant="info" className="mt-4">Otomatisasi production tetap OFF sambil menunggu evaluasi kualitas penelitian dan persetujuan terpisah. Artifact worker tetap tersimpan <code>UNVERIFIED</code>; hanya prototipe lokal `_test` yang boleh memverifikasi ulang dan menerbitkan hasil Python.</Alert>
         <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-2 text-xs text-secondary">
           <span>Job pending <strong className="text-gray-900">{data.jobs.pending}</strong></span>
           <span>Berjalan <strong className="text-gray-900">{data.jobs.running}</strong></span>
@@ -166,7 +172,7 @@ export function EngineMonitoring({ mode = "full" }: { mode?: "summary" | "full" 
                   <th scope="col" className="px-3 py-3">Job / Trigger</th><th scope="col" className="px-3 py-3">Komputasi</th><th scope="col" className="px-3 py-3">Dataset revision</th><th scope="col" className="px-3 py-3">Engine</th><th scope="col" className="px-3 py-3">Attempt</th><th scope="col" className="px-3 py-3">Waktu / durasi</th><th scope="col" className="px-3 py-3">Verifikasi</th><th scope="col" className="px-3 py-3">Stale</th><th scope="col" className="px-3 py-3">Publikasi</th>
                 </tr></thead>
                 <tbody className="divide-y divide-border">{data.recentJobs.map((job) => <tr key={job.id}>
-                  <td className="max-w-52 px-3 py-3"><code className="block break-all font-mono text-[10px] text-gray-800">{job.id}</code><span className="mt-1 block text-secondary">{job.trigger === "AUTO_RATING_CHANGE" ? "Otomatis (terkunci)" : "Manual"}</span>{job.errorSummary && <p className="mb-0 mt-1 text-red-700">{job.errorSummary}</p>}</td>
+                  <td className="max-w-52 px-3 py-3"><code className="block break-all font-mono text-[10px] text-gray-800">{job.id}</code><span className="mt-1 block text-secondary">{jobTriggerLabel(job.trigger)}</span>{job.errorSummary && <p className="mb-0 mt-1 text-red-700">{job.errorSummary}</p>}</td>
                   <td className="px-3 py-3"><StatusBadge tone={job.status === "SUCCEEDED" ? "good" : job.status === "FAILED" ? "error" : job.status === "RUNNING" ? "warning" : "neutral"}>{jobStatusLabel(job.status)}</StatusBadge><span className="mt-1 block text-secondary">{job.status}</span></td>
                   <td className="px-3 py-3">{job.datasetRevision}{job.artifact && <span className="mt-1 block text-secondary">Hasil: {job.artifact.sourceRatingRevision} / kini {job.artifact.currentRatingRevision}</span>}</td>
                   <td className="px-3 py-3">{job.engineVersion}</td>
@@ -174,7 +180,7 @@ export function EngineMonitoring({ mode = "full" }: { mode?: "summary" | "full" 
                   <td className="px-3 py-3">Mulai: {formatDate(job.startedAt)}<span className="mt-1 block">Selesai: {formatDate(job.finishedAt)}</span><span className="mt-1 block text-secondary">Durasi: {formatDuration(job.durationMs)}</span></td>
                   <td className="px-3 py-3">{job.artifact ? <StatusBadge tone="warning">{job.artifact.verificationStatus}</StatusBadge> : "Belum ada artifact"}</td>
                   <td className="px-3 py-3">{job.artifact ? job.artifact.isStale ? <StatusBadge tone="error">Stale</StatusBadge> : <StatusBadge tone="good">Tidak stale</StatusBadge> : "—"}</td>
-                  <td className="px-3 py-3">Tidak diterbitkan otomatis</td>
+                  <td className="px-3 py-3">{job.trigger === "TEST_PROTOTYPE" ? "Re-verifikasi terisolasi (_test)" : "Tidak diterbitkan otomatis"}</td>
                 </tr>)}</tbody>
               </table>
             </div>

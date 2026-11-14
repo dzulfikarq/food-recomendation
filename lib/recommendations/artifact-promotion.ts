@@ -14,17 +14,13 @@ export class RecommendationArtifactPromotionError extends Error {
   }
 }
 
-/**
- * ponytail: pure, dormant converter. Current DB constraints allow only UNVERIFIED artifacts and closed gates;
- * no runtime caller exists until research validation and an approved gate migration.
- */
-export function prepareVerifiedArtifactBatch(input: {
-  jobStatus: string;
-  jobId: string;
+export function prepareTestPrototypeBatch(input: {
+  job: { id: string; status: string; engineVersion: string; datasetExportId: number };
   createdByAdminId: number;
   dataset: { id: number; filename: string; fileChecksum: string; rowCount: number; ratingRevision: bigint; createdAt: Date };
   currentRatingRevision: bigint;
   artifact: {
+    id: string;
     verificationStatus: string;
     checksum: string;
     rowCount: number;
@@ -33,66 +29,106 @@ export function prepareVerifiedArtifactBatch(input: {
     isStale: boolean;
     payload: unknown;
   };
-  gate: { validationStatus: string; autoProcessingEnabled: boolean; automaticPublicationEnabled: boolean };
-  parameters: { kNeighbors: number; topN: number; activeFoodIds: number[]; targetUserIds: number[] };
+  config: { validationStatus: string; autoProcessingEnabled: boolean; automaticPublicationEnabled: boolean };
+  parameters: {
+    kNeighbors: number;
+    topN: number;
+    minCommonRatings: number;
+    similarityStrategy: "overlap";
+    activeFoodIds: number[];
+    targetUserIds: number[];
+  };
+  currentActiveFoodIds: number[];
+  currentTargetUserIds: number[];
   sourceRatings: ParsedRatingRow[];
 }) {
-  const { artifact, dataset, parameters } = input;
-  if (input.gate.validationStatus !== "VALIDATED" || !input.gate.autoProcessingEnabled || !input.gate.automaticPublicationEnabled) {
-    throw new RecommendationArtifactPromotionError("VALIDATION_GATE_CLOSED");
+  const { job, dataset, artifact, parameters } = input;
+  if (
+    input.config.validationStatus !== "PENDING_VALIDATION" ||
+    input.config.autoProcessingEnabled || input.config.automaticPublicationEnabled
+  ) {
+    throw new RecommendationArtifactPromotionError("AUTOMATION_GATES_MUST_REMAIN_CLOSED");
   }
-  if (input.jobStatus !== "SUCCEEDED" || artifact.verificationStatus !== "VERIFIED") {
-    throw new RecommendationArtifactPromotionError("ARTIFACT_UNVERIFIED");
+  if (job.status !== "SUCCEEDED" || job.engineVersion !== "python-ubcf-v1" || job.datasetExportId !== dataset.id) {
+    throw new RecommendationArtifactPromotionError("JOB_INVALID");
   }
+  if (artifact.verificationStatus !== "UNVERIFIED") throw new RecommendationArtifactPromotionError("ARTIFACT_STATUS_INVALID");
   if (
     artifact.isStale || artifact.sourceRatingRevision !== dataset.ratingRevision ||
     artifact.sourceRatingRevision !== input.currentRatingRevision || artifact.currentRatingRevision !== input.currentRatingRevision
-  ) {
-    throw new RecommendationArtifactPromotionError("ARTIFACT_STALE");
-  }
-  if (!input.parameters.targetUserIds.length || new Set(input.parameters.targetUserIds).size !== input.parameters.targetUserIds.length) {
-    throw new RecommendationArtifactPromotionError("ARTIFACT_TARGETS_INVALID");
-  }
+  ) throw new RecommendationArtifactPromotionError("ARTIFACT_STALE");
+  if (
+    !Number.isSafeInteger(parameters.kNeighbors) || parameters.kNeighbors < 1 ||
+    !Number.isSafeInteger(parameters.topN) || parameters.topN < 1 ||
+    !Number.isSafeInteger(parameters.minCommonRatings) || parameters.minCommonRatings < 1 ||
+    parameters.similarityStrategy !== "overlap" || !samePositiveIds(parameters.activeFoodIds, input.currentActiveFoodIds) ||
+    !samePositiveIds(parameters.targetUserIds, input.currentTargetUserIds)
+  ) throw new RecommendationArtifactPromotionError("JOB_PARAMETERS_OR_COHORT_INVALID");
 
   const payload = normalizePayload(artifact.payload);
   if (payload.recommendations.length !== artifact.rowCount) throw new RecommendationArtifactPromotionError("ARTIFACT_ROW_COUNT_MISMATCH");
-  const canonicalPayload = JSON.stringify(payload);
-  if (createHash("sha256").update(canonicalPayload).digest("hex") !== artifact.checksum) {
+  if (createHash("sha256").update(JSON.stringify(payload)).digest("hex") !== artifact.checksum) {
     throw new RecommendationArtifactPromotionError("ARTIFACT_CHECKSUM_MISMATCH");
   }
 
-  const targets = new Set(input.parameters.targetUserIds);
-  const activeFoods = new Set(input.parameters.activeFoodIds);
-  const ratedPairs = new Set(input.sourceRatings.map(({ userId, foodId }) => `${userId}:${foodId}`));
+  const activeFoods = new Set(parameters.activeFoodIds);
+  const targets = new Set(parameters.targetUserIds);
+  const ratedFoodsByUser = new Map<number, Set<number>>();
+  const ratingsByUser = new Map<number, Map<number, number>>();
+  for (const { userId, foodId, rating } of input.sourceRatings) {
+    const foods = ratedFoodsByUser.get(userId) ?? new Set<number>();
+    foods.add(foodId);
+    ratedFoodsByUser.set(userId, foods);
+    const ratings = ratingsByUser.get(userId) ?? new Map<number, number>();
+    ratings.set(foodId, rating);
+    ratingsByUser.set(userId, ratings);
+  }
+  const rowsByUser = new Map<number, typeof payload.recommendations>();
+  for (const row of payload.recommendations) {
+    if (
+      !targets.has(row.userId) || !activeFoods.has(row.foodId) || ratedFoodsByUser.get(row.userId)?.has(row.foodId) ||
+      row.rank > parameters.topN || row.predictedRating < 1 || row.predictedRating > 5
+    ) throw new RecommendationArtifactPromotionError("ARTIFACT_RECOMMENDATION_INVALID");
+    const rows = rowsByUser.get(row.userId) ?? [];
+    rows.push(row);
+    rowsByUser.set(row.userId, rows);
+  }
+  for (const rows of rowsByUser.values()) {
+    rows.sort((left, right) => left.rank - right.rank);
+    if (rows.some((row, index) => row.rank !== index + 1)) throw new RecommendationArtifactPromotionError("ARTIFACT_RANKS_INVALID");
+    if (rows.some((row, index) => index > 0 && (
+      rows[index - 1]!.predictedRating < row.predictedRating ||
+      (rows[index - 1]!.predictedRating === row.predictedRating && rows[index - 1]!.foodId > row.foodId)
+    ))) throw new RecommendationArtifactPromotionError("ARTIFACT_ORDER_INVALID");
+  }
+
   const outcomes = new Map(payload.userStatuses.map(({ userId, status }) => [userId, status]));
   if (outcomes.size !== targets.size || [...targets].some((userId) => !outcomes.has(userId))) {
-    throw new RecommendationArtifactPromotionError("ARTIFACT_TARGETS_INVALID");
-  }
-  const usersWithRecommendations = new Set<number>();
-  for (const row of payload.recommendations) {
-    const key = `${row.userId}:${row.foodId}`;
-    if (
-      !targets.has(row.userId) || !activeFoods.has(row.foodId) || ratedPairs.has(key) ||
-      row.rank > input.parameters.topN || row.predictedRating < 1 || row.predictedRating > 5
-    ) throw new RecommendationArtifactPromotionError("ARTIFACT_ROWS_INVALID");
-    usersWithRecommendations.add(row.userId);
+    throw new RecommendationArtifactPromotionError("ARTIFACT_COHORT_INVALID");
   }
   for (const [userId, status] of outcomes) {
-    if ((status === "READY") !== usersWithRecommendations.has(userId)) {
-      throw new RecommendationArtifactPromotionError("ARTIFACT_STATUS_MISMATCH");
+    const expected = expectedRecommendations(userId, ratingsByUser, [...activeFoods], parameters);
+    const actual = rowsByUser.get(userId) ?? [];
+    if (status !== expected.status || actual.length !== expected.rows.length || actual.some((row, index) =>
+      row.foodId !== expected.rows[index]!.foodId || Math.abs(row.predictedRating - expected.rows[index]!.predictedRating) > 1e-10
+    )) throw new RecommendationArtifactPromotionError("ARTIFACT_PREDICTION_MISMATCH");
+  }
+
+  const csv = Buffer.from([
+    "user_id,item_id,rank",
+    ...payload.recommendations.map(({ userId, foodId, rank }) => `${userId},${foodId},${rank}`)
+  ].join("\r\n") + "\r\n", "utf8");
+  if (payload.recommendations.length) {
+    const parsed = parseRecommendationCsv(csv, parameters.topN);
+    if (parsed.errors.length || parsed.rows.length !== payload.recommendations.length) {
+      throw new RecommendationArtifactPromotionError("ARTIFACT_RANKS_INVALID");
     }
   }
 
-  const csvText = [
-    "user_id,item_id,rank",
-    ...payload.recommendations.map(({ userId, foodId, rank }) => `${userId},${foodId},${rank}`)
-  ].join("\r\n") + "\r\n";
-  const csv = Buffer.from(csvText, "utf8");
-  const parsed = parseRecommendationCsv(csv, parameters.topN);
-  if (parsed.errors.length || parsed.rows.length !== payload.recommendations.length) {
-    throw new RecommendationArtifactPromotionError("ARTIFACT_RANKS_INVALID");
-  }
-
+  const outcomeCounts = Object.fromEntries(RECOMMENDATION_OUTCOME_STATUSES.map((status) => [
+    status,
+    payload.userStatuses.filter((outcome) => outcome.status === status).length
+  ])) as Record<RecommendationOutcomeStatus, number>;
   const report: RecommendationValidationReport = {
     source: {
       datasetExportId: dataset.id,
@@ -103,13 +139,13 @@ export function prepareVerifiedArtifactBatch(input: {
     },
     parameters: { kNeighbors: parameters.kNeighbors, topN: parameters.topN, similarity: "COSINE" },
     summary: {
-      totalRows: parsed.totalRows,
-      validRows: parsed.totalRows,
+      totalRows: payload.recommendations.length,
+      validRows: payload.recommendations.length,
       invalidRows: 0,
-      recommendationCount: parsed.rows.length,
-      userCount: usersWithRecommendations.size,
+      recommendationCount: payload.recommendations.length,
+      userCount: rowsByUser.size,
       sourceUserCount: targets.size,
-      usersWithoutRecommendations: targets.size - usersWithRecommendations.size,
+      usersWithoutRecommendations: targets.size - rowsByUser.size,
       staleDataset: false,
       ratingsAdded: 0,
       ratingsChanged: 0,
@@ -119,24 +155,99 @@ export function prepareVerifiedArtifactBatch(input: {
     errors: [],
     warnings: [],
     preview: [],
-    userStatuses: payload.userStatuses
+    userStatuses: payload.userStatuses,
+    artifactVerification: {
+      status: "REVERIFIED_FOR_LOCAL_PROTOTYPE",
+      storedArtifactStatus: artifact.verificationStatus,
+      artifactId: artifact.id,
+      artifactChecksum: artifact.checksum,
+      jobId: job.id,
+      engineVersion: job.engineVersion,
+      datasetRevision: dataset.ratingRevision.toString(),
+      currentRevision: input.currentRatingRevision.toString(),
+      parameters: {
+        kNeighbors: parameters.kNeighbors,
+        topN: parameters.topN,
+        minCommonRatings: parameters.minCommonRatings,
+        similarityStrategy: parameters.similarityStrategy
+      },
+      cohortUserCount: targets.size,
+      candidateFoodCount: activeFoods.size,
+      outcomeCounts
+    }
   };
 
   return {
     csv,
-    rows: parsed.rows,
+    rows: payload.recommendations,
+    report,
     batch: {
       datasetExportId: dataset.id,
       adminId: input.createdByAdminId,
-      status: "VALIDATED" as const,
+      status: "PUBLISHED" as const,
       kNeighbors: parameters.kNeighbors,
       topN: parameters.topN,
       similarity: "COSINE",
       fileChecksum: createHash("sha256").update(csv).digest("hex"),
-      filename: `python-${input.jobId}.csv`,
-      validationReport: report
+      filename: `python-${job.id}.csv`
     }
   };
+}
+
+function samePositiveIds(left: number[], right: number[]) {
+  return left.every((id) => Number.isSafeInteger(id) && id > 0) && right.every((id) => Number.isSafeInteger(id) && id > 0) &&
+    new Set(left).size === left.length && new Set(right).size === right.length &&
+    left.length === right.length && left.every((id) => right.includes(id));
+}
+
+function expectedRecommendations(
+  userId: number,
+  ratingsByUser: Map<number, Map<number, number>>,
+  activeFoodIds: number[],
+  parameters: { kNeighbors: number; topN: number; minCommonRatings: number }
+) {
+  const targetRatings = ratingsByUser.get(userId) ?? new Map<number, number>();
+  if (!targetRatings.size) return { status: "COLD_START" as const, rows: [] };
+  const candidates = activeFoodIds.filter((foodId) => !targetRatings.has(foodId));
+  if (!candidates.length) return { status: "NO_CANDIDATES" as const, rows: [] };
+
+  const neighbors: { userId: number; similarity: number; ratings: Map<number, number> }[] = [];
+  for (const [otherUserId, otherRatings] of ratingsByUser) {
+    if (otherUserId === userId) continue;
+    const common = [...targetRatings.keys()].filter((foodId) => otherRatings.has(foodId));
+    if (common.length < parameters.minCommonRatings) continue;
+    let dot = 0;
+    let leftSquares = 0;
+    let rightSquares = 0;
+    for (const foodId of common) {
+      const left = targetRatings.get(foodId)!;
+      const right = otherRatings.get(foodId)!;
+      dot += left * right;
+      leftSquares += left * left;
+      rightSquares += right * right;
+    }
+    const denominator = Math.sqrt(leftSquares) * Math.sqrt(rightSquares);
+    const similarity = Math.max(-1, Math.min(1, dot / denominator));
+    if (denominator > 0 && similarity > 0) neighbors.push({ userId: otherUserId, similarity, ratings: otherRatings });
+  }
+  neighbors.sort((left, right) => right.similarity - left.similarity || left.userId - right.userId);
+  const selected = neighbors.slice(0, parameters.kNeighbors);
+  if (!selected.length) return { status: "NO_NEIGHBORS" as const, rows: [] };
+
+  const predictions = candidates.flatMap((foodId) => {
+    const weighted = selected.flatMap((neighbor) => {
+      const rating = neighbor.ratings.get(foodId);
+      return rating === undefined ? [] : [{ weight: neighbor.similarity, rating }];
+    });
+    const weightSum = weighted.reduce((sum, { weight }) => sum + weight, 0);
+    if (!weightSum) return [];
+    const value = weighted.reduce((sum, { weight, rating }) => sum + weight * rating, 0) / weightSum;
+    const ratings = weighted.map(({ rating }) => rating);
+    return [{ foodId, predictedRating: Math.min(Math.max(...ratings), Math.max(Math.min(...ratings), value)) }];
+  });
+  if (!predictions.length) return { status: "NO_PREDICTIONS" as const, rows: [] };
+  predictions.sort((left, right) => right.predictedRating - left.predictedRating || left.foodId - right.foodId);
+  return { status: "READY" as const, rows: predictions.slice(0, parameters.topN) };
 }
 
 function normalizePayload(value: unknown): ArtifactPayload {
@@ -164,7 +275,7 @@ function normalizePayload(value: unknown): ArtifactPayload {
     return { userId: outcome.userId as number, status: outcome.status as RecommendationOutcomeStatus };
   });
   if (new Set(recommendations.map(({ userId, foodId }) => `${userId}:${foodId}`)).size !== recommendations.length) {
-    throw new RecommendationArtifactPromotionError("ARTIFACT_ROWS_INVALID");
+    throw new RecommendationArtifactPromotionError("ARTIFACT_ROWS_DUPLICATE");
   }
   if (new Set(userStatuses.map(({ userId }) => userId)).size !== userStatuses.length) {
     throw new RecommendationArtifactPromotionError("ARTIFACT_STATUS_DUPLICATE");

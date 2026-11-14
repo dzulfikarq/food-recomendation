@@ -54,15 +54,16 @@ const env = {
 };
 if (!existsSync(env.FOODREC_CHROME_PATH)) throw new Error("Chrome not found; set FOODREC_CHROME_PATH to an installed Chromium browser.");
 
-async function run(label, executable, args) {
-  const commandDatabaseName = decodeURIComponent(new URL(env.DATABASE_URL).pathname.replace(/^\//, ""));
+async function run(label, executable, args, overrides = {}) {
+  const commandEnv = { ...env, ...overrides };
+  const commandDatabaseName = decodeURIComponent(new URL(commandEnv.DATABASE_URL).pathname.replace(/^\//, ""));
   if (commandDatabaseName !== databaseName || commandDatabaseName === originalName || !commandDatabaseName.endsWith("_test")) {
     throw new Error(`Refusing ${label}; DATABASE_URL does not match isolated test database.`);
   }
   await verifyPostgresTarget(testUrl, databaseName, decodeURIComponent(target.username), maintenanceServer);
   console.info(`\n[E2E] ${label}`);
-  const commandEnv = label === "Build production app against isolated E2E database" ? { ...env, NODE_ENV: "production" } : env;
-  const result = spawnSync(executable, args, { cwd: root, env: commandEnv, stdio: "inherit", windowsHide: true });
+  const childEnv = label === "Build production app against isolated E2E database" ? { ...commandEnv, NODE_ENV: "production" } : commandEnv;
+  const result = spawnSync(executable, args, { cwd: root, env: childEnv, stdio: "inherit", windowsHide: true });
   if (result.error) throw result.error;
   if (result.status !== 0) throw new Error(`${label} exited with status ${result.status ?? "unknown"}.`);
 }
@@ -72,6 +73,7 @@ const nextCli = path.join(root, "node_modules", "next", "dist", "bin", "next");
 const playwrightCli = path.join(root, "node_modules", "@playwright", "test", "cli.js");
 await run("Generate Prisma client", process.execPath, [prismaCli, "generate"]);
 await run("Apply migrations to isolated E2E database", process.execPath, [prismaCli, "migrate", "deploy"]);
+await enableIsolatedTestPrototypeJobs();
 await run("Seed isolated E2E administrator", process.execPath, ["--import", "tsx", "prisma/seed.ts"]);
 await run("Seed foods without changing existing Food Codes", process.execPath, ["--import", "tsx", "prisma/seed-foods.ts"]);
 const nextEnvFile = path.join(root, "next-env.d.ts");
@@ -85,3 +87,34 @@ try {
   if (!readFileSync(tsconfigFile).equals(tsconfigBeforeBuild)) writeFileSync(tsconfigFile, tsconfigBeforeBuild);
 }
 await run("Run Phase F Chromium journeys and real worker check", process.execPath, [playwrightCli, "test", "--config=playwright.config.ts", "tests/e2e/phase-f.spec.ts"]);
+await run("Run isolated local Python recommendation prototype journey", process.execPath, [playwrightCli, "test", "--config=playwright.config.ts", "tests/e2e/recommendation-prototype.spec.ts"], {
+  FOODREC_TEST_AUTO_RECOMMENDATIONS: "1"
+});
+
+async function enableIsolatedTestPrototypeJobs() {
+  const prototypeClient = new pg.Client({ connectionString: testUrl });
+  await prototypeClient.connect();
+  await verifyPostgresTarget(testUrl, databaseName, decodeURIComponent(target.username), maintenanceServer);
+  try {
+    await prototypeClient.query("BEGIN");
+    // This constraint exception is deliberately confined to the already-verified local E2E _test database.
+    await prototypeClient.query(`
+      ALTER TABLE "RecommendationJob" DROP CONSTRAINT IF EXISTS "RecommendationJob_trigger_check";
+      ALTER TABLE "RecommendationJob" ADD CONSTRAINT "RecommendationJob_trigger_check"
+        CHECK ("trigger" IN ('MANUAL_ADMIN', 'AUTO_RATING_CHANGE', 'TEST_PROTOTYPE'));
+      ALTER TABLE "RecommendationJob" DROP CONSTRAINT IF EXISTS "RecommendationJob_automatic_dedupe_check";
+      ALTER TABLE "RecommendationJob" ADD CONSTRAINT "RecommendationJob_automatic_dedupe_check"
+        CHECK (
+          ("trigger" = 'MANUAL_ADMIN' AND "automaticDedupeKey" IS NULL) OR
+          ("trigger" IN ('AUTO_RATING_CHANGE', 'TEST_PROTOTYPE') AND "automaticDedupeKey" IS NOT NULL)
+        );
+    `);
+    await prototypeClient.query("COMMIT");
+  } catch (error) {
+    await prototypeClient.query("ROLLBACK").catch(() => undefined);
+    throw error;
+  } finally {
+    await prototypeClient.end();
+  }
+  console.info(`Enabled TEST_PROTOTYPE trigger only in isolated database: ${databaseName}`);
+}

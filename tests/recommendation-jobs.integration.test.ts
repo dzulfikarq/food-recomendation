@@ -328,6 +328,10 @@ test("recommendation jobs enforce auth, atomic leases, retries, immutable snapsh
     assert.equal(manualImportResponse.status, 201, await manualImportResponse.clone().text());
     const manualImport = (await manualImportResponse.json()).data;
     assert.equal(manualImport.status, "VALIDATED");
+    const sourceUserCount = new Set(oracleSnapshot.toString("utf8").split(/\r?\n/).slice(1).flatMap((line) => {
+      const userId = Number(line.split(",", 1)[0]);
+      return Number.isSafeInteger(userId) && userId > 0 ? [userId] : [];
+    })).size;
     assert.deepEqual({
       sourceUserCount: manualImport.report.summary.sourceUserCount,
       userCount: manualImport.report.summary.userCount,
@@ -335,7 +339,7 @@ test("recommendation jobs enforce auth, atomic leases, retries, immutable snapsh
       ratingsAdded: manualImport.report.summary.ratingsAdded,
       ratingsChanged: manualImport.report.summary.ratingsChanged,
       ratingsRemoved: manualImport.report.summary.ratingsRemoved
-    }, { sourceUserCount: 3, userCount: 1, staleDataset: false, ratingsAdded: 0, ratingsChanged: 0, ratingsRemoved: 0 });
+    }, { sourceUserCount, userCount: 1, staleDataset: false, ratingsAdded: 0, ratingsChanged: 0, ratingsRemoved: 0 });
   } finally {
     if (oracleWorker && oracleWorker.exitCode === null) oracleWorker.kill();
     if (snapshotFile && originalSnapshot) await writeFile(snapshotFile, originalSnapshot).catch(() => undefined);

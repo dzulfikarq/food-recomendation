@@ -1,8 +1,18 @@
 # Recommendation Engine Validation
 
-## Status: Pending Validation
+## Status: local prototype flow implemented; research-quality validation pending
 
-Python core implements explicit UBCF baselines and Phase C worker runs it through authenticated staging jobs. It does not feed the website recommendation page or publication path. Phase B now includes a user-provided native Altair train-264 Top-1 CSV and per-user Python diagnostics; no native toy-43 CSV, train-264 workflow, or Altair score/neighbor export is available. The 43-rating input is a toy fixture. Native train-264 output mismatches Python 0/22; ranking comparison alone does not prove mathematical parity. Automatic processing remains **OFF**.
+Python explicit-rating UBCF is the primary application method. In isolated local `_test`, rating-triggered jobs use the existing authenticated Python worker; the application rechecks artifact and snapshot integrity, then publishes only verified demo batches. Stored artifacts remain `UNVERIFIED`, research-quality status stays separate, and production automation/publication gates remain closed. Altair evidence is historical and not a prototype acceptance gate: the 43-row screenshot transcription matched 5/5; native train-264 Top-1 matched 0/22. Neither establishes quality or mathematical parity.
+
+## Existing quality metrics — exploratory, not confirmatory
+
+| Evaluation | Existing result | Interpretation |
+| --- | --- | --- |
+| Phase G holdout, 264 train / 66 test | 42/66 predictions (63.64% coverage); MAE 0.571609; RMSE 1.086003 | Single Python-only exploratory split; source provenance unverified; no confirmatory claim. |
+| Food.com validation, 2,463 pairs | `k=1` selected using 8 predictions (0.3248% coverage); MAE 0.375000; RMSE 0.612372 | Exploratory selection evidence; inadequate coverage for reliable parameter choice. |
+| Food.com test, 2,801 pairs | 15 predictions (0.5355% coverage); MAE 0.400000; RMSE 0.730297 | Test was inspected; 2,786 pairs missing. Conditional metrics only, not evidence of quality or superiority. |
+
+No confirmatory evaluation has run. MAE/RMSE values and historical Altair comparisons remain unchanged; see [`research/EXPERIMENT_RESULTS.md`](research/EXPERIMENT_RESULTS.md) for Food.com baselines and limitations.
 
 ## Current baseline
 
@@ -16,7 +26,7 @@ This is an implementation baseline, **not an approved thesis methodology**. See 
 - Candidate eligibility: active food IDs supplied by snapshot caller, excluding every food target user rated in that snapshot.
 - Top-N: predicted rating descending, then food ID ascending. Candidate IDs are deduplicated before scoring.
 - Empty statuses: `COLD_START`, `NO_CANDIDATES`, `NO_NEIGHBORS`, `NO_PREDICTIONS`; successful result is `READY`.
-- Initial operational values suggested by product: `kNeighbors=3`, `topN=5`; these are not research findings. Phase C queue worker polls every 2 seconds, but no automatic job enqueue/scheduler exists. Engine functions require k and Top-N explicitly.
+- Initial operational values suggested by product: `kNeighbors=3`, `topN=5`; these are not research findings. Production enqueue/publication remain locked; local `_test` prototype uses the existing queue/worker. Engine functions require k and Top-N explicitly.
 
 ## Phase A synthetic unit fixture
 
@@ -154,7 +164,7 @@ This check does **not** call Top-N. For each of 66 test pairs, it selects neighb
 - 43-rating screenshot-transcription comparison: **MATCHED OUTPUT** (5/5 ordered rows); mathematics not proven; no native 43 export.
 - Train-264 native Top-1 comparison: **MISMATCH** (22/22 row count, user IDs and rank values align; 0/22 item IDs align).
 - Mathematical parity: **Pending Validation**. Public source suggests binary-feedback/support scoring, but runtime linkage and matching neighbor/score evidence are missing.
-- Automatic processing: **OFF**. Do not open publication/automation gate from ranking evidence.
+- Production automatic processing/publication: **OFF**. Local Python prototype E2E: **PASS** on fresh isolated `_test` database/storage; not recommendation-quality evidence.
 
 ## Validation dimensions and future gate criteria
 
@@ -163,17 +173,17 @@ Do not collapse these independent decisions into one `VALIDATED` claim:
 | Dimension | Acceptance evidence | Current status |
 | --- | --- | --- |
 | Mathematical implementation | Frozen equation/semantics; independent hand-computed fixture checks similarity, overlap threshold, neighbor order/top-k, weighted predictions, exclusions, deterministic ties, and missing outcomes; regression tests pass. | The Python implementation can be checked against its stated explicit-rating definition. This is not methodology approval or Altair parity. |
-| Application integration | Isolated PostgreSQL `_test`; actual worker output matches oracle; source/current revisions and stale flag agree; historical rows stay distinct from active account ratings; artifact remains `UNVERIFIED`; automatic publication is rejected; existing manual publication tests pass. | Integration evidence only. No gate change. |
+| Application integration | Isolated PostgreSQL `_test`; actual worker output matches recomputed UBCF; source/current revisions and stale flag agree; candidates, outcomes and ranking validate; artifact stays `UNVERIFIED`; batch report records separate local re-verification; normal DB still rejects `TEST_PROTOTYPE`. | **Prototype E2E PASS**; no production gate change. |
 | Recommendation quality | Approved, provenance-checked data and predeclared evaluation; leakage-free train/validation/test; tuning only on validation; compare rating and ranking metrics to baselines; report coverage/missing reasons and uncertainty. | **Pending.** Existing 42/66 pilot metrics and Top-1 comparisons do not meet this bar. |
 | Dataset and production readiness | Rights/provenance and permitted use confirmed; data/privacy review, security, capacity, backup/restore, monitoring, rollback, and explicit release approval complete. | **Pending.** Food.com redistribution/use rights remain unverified; no production readiness claim. |
 
 Historical rows are part of the exported combined dataset, so their insert/update/delete correctly advances the global dataset revision. They are negative, namespaced worker neighbors—not positive FoodRec accounts—and must not inflate account-only `sourceUserCount` or appear as removed active-user ratings during CSV revalidation.
 
-The current gate explicitly encodes Altair parity: `RecommendationEngineConfig.validationStatus` is database-constrained to `PENDING_VALIDATION`; the admin API cannot patch it and reports `MATHEMATICAL_PARITY_PENDING_VALIDATION`. A separate database trigger rejects automatic jobs. `RecommendationJobArtifact.verificationStatus` is database-constrained to `UNVERIFIED`; worker success cannot promote or publish it. These constraints were not changed.
+`RecommendationEngineConfig.validationStatus` remains database-constrained to `PENDING_VALIDATION`; the admin API cannot patch it. Production auto-processing/publication remain false, and the database trigger rejects `AUTO_RATING_CHANGE`. These locks represent pending research-quality/production approval, not a requirement to achieve Altair parity before demonstrating Python UBCF. The separately guarded `TEST_PROTOTYPE` path runs only with E2E flag, run ID, and matching local `_test` database; it re-verifies snapshots/artifacts and records evidence in the published batch report. The E2E runner relaxes trigger/dedupe checks only in its verified test database; normal DB constraints reject `TEST_PROTOTYPE`. Artifact DB status remains `UNVERIFIED`; none of these checks validates recommendation quality. No production database constraint or gate changed.
 
 Manual CSV `RecommendationBatch.status=VALIDATED` means only that FoodRec's structural, reference, and snapshot checks passed. Admin confirmation can publish that manual batch while the worker gate stays closed. It is not evidence of algorithm correctness, quality, license, or production readiness.
 
-Before any gate-opening migration, decision owner must explicitly choose whether exact parity with a specified Altair workflow is mandatory. If mandatory, require the exact workflow/settings, installed Altair and extension versions/build hash, matched candidate universe, and comparable neighbor/similarity/prediction evidence; native Top-N rows alone are insufficient. If the approved reference is instead the explicit-rating Python definition, record that policy change and its sign-off—do not silently reinterpret the existing parity gate. Only after all four dimensions pass separately, an explicitly approved additive migration may relax the database constraints; worker artifacts must still require an explicit verification action. Automatic processing and publication require separate authorization.
+Before production gate changes, require confirmatory quality evaluation, dataset rights/provenance, operational review, and explicit authorization. Require Altair parity evidence only if study owners choose it as a research comparison; if so, obtain exact workflow/build and intermediate neighbor/similarity/prediction data—native Top-N rows alone are insufficient. Any gate change needs a separately approved migration; local prototype checks do not qualify. Worker artifacts must remain `UNVERIFIED` until explicit verification policy changes, and production automation/publication require separate authorization.
 
 ## Phase F QA evidence (2026-11-11)
 

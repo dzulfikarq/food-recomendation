@@ -142,6 +142,19 @@ test("rating revisions, locked scheduler, config gate, worker status, and stale 
         timeoutSeconds: 900
       }
     }));
+    await assert.rejects(prisma.recommendationJob.create({
+      data: {
+        datasetExportId: dataset.id,
+        createdByAdminId: admin.id,
+        trigger: "TEST_PROTOTYPE",
+        idempotencyKey: randomUUID(),
+        automaticDedupeKey: "b".repeat(64),
+        engineVersion: "python-ubcf-v1",
+        parameters: { kNeighbors: 3, topN: 1, minCommonRatings: 1, similarityStrategy: "overlap", activeFoodIds: foodIds },
+        maxAttempts: 3,
+        timeoutSeconds: 900
+      }
+    }), "production-style _test DB must continue rejecting prototype trigger without E2E constraint exception");
     const createJob = await api("/api/admin/recommendation-jobs", "POST", {
       datasetExportId: dataset.id,
       kNeighbors: 3,
@@ -228,7 +241,7 @@ test("rating revisions, locked scheduler, config gate, worker status, and stale 
     assert.equal(monitor.dataset.dirty, true, "admin monitor reports dirty dataset");
     assert.equal(monitor.validationGate.status, "PENDING_VALIDATION");
     assert.equal(monitor.validationGate.open, false);
-    assert.equal(monitor.validationGate.reasons.includes("MATHEMATICAL_PARITY_PENDING_VALIDATION"), true, "monitor explains pending parity gate");
+    assert.equal(monitor.validationGate.reasons.includes("RESEARCH_QUALITY_VALIDATION_PENDING"), true, "monitor separates research-quality validation from Altair parity");
     assert.equal(monitor.workers.find((worker: { workerId: string }) => worker.workerId === "schedule-worker-a").online, false);
     assert.equal(monitor.workers.find((worker: { workerId: string }) => worker.workerId === "schedule-worker-c").online, true, "recent scheduler worker heartbeat is online");
     assert.equal(typeof monitor.jobs.pending, "number");

@@ -29,7 +29,7 @@ Beranda menampilkan sapaan, jumlah rating tersimpan, langkah berikutnya, tautan 
 
 Dashboard operasional dan monitoring → siapkan dataset → unduh CSV → jalankan Altair manual → impor hasil → validasi → konfirmasi publikasi → tinjau riwayat.
 
-FoodRec tidak menghitung UBCF/Cosine Similarity, tidak terhubung otomatis ke Altair, dan tidak mengubah batch saat rating disimpan.
+Python UBCF menjadi engine utama aplikasi. Hanya E2E lokal dengan database `_test` dapat mengantrekan job setelah rating dan menerbitkan hasil sesudah verifikasi teknis. Di lingkungan lain, rating tidak memulai komputasi dan batch tetap mengikuti workflow manual Admin.
 
 ## Halaman
 
@@ -56,7 +56,7 @@ Semantics status backend tidak berubah.
 | Status | Penjelasan | Tindakan yang tersedia |
 | --- | --- | --- |
 | `NO_RATINGS` | Belum ada rating pada akun. | Jelajahi dan nilai makanan yang dikenal. |
-| `NO_BATCH` | Rating ada, tetapi belum ada batch yang diterbitkan. | Lihat rating atau lanjut jelajah; tidak ada janji kapan hasil terbit. |
+| `NO_BATCH` | Rating ada, tetapi belum ada batch yang diterbitkan. | Lihat rating atau lanjut jelajah; selain prototipe `_test`, publikasi tetap manual. |
 | `NOT_INCLUDED` | Akun tidak tercantum pada batch aktif. | Jelajahi katalog atau tinjau rating; hasil baru perlu batch diterbitkan admin. |
 | `ALL_RATED` | Semua rekomendasi aktif sudah dinilai. | Lihat Rating Saya atau jelajahi katalog. |
 | `NO_AVAILABLE_FOODS` | Tidak ada kandidat aktif yang dapat ditampilkan. | Jelajahi katalog aktif atau lihat rating. |
@@ -71,7 +71,7 @@ Semantics status backend tidak berubah.
 5. **Validasi** — tinjau referensi, rank, warning stale, error, dan preview. Validasi struktur FoodRec bukan bukti kesesuaian matematis dengan Altair.
 6. **Publikasikan** — tinjau batch valid dan tidak kosong, lalu konfirmasi publikasi manual. Server memvalidasi ulang dan menerbitkan secara atomik; riwayat/checksum tetap tersedia.
 
-Stepper menunjukkan tahap saat ini/selesai berdasarkan snapshot dan batch tersimpan. Monitoring memakai API Admin yang ada dan membedakan job dihitung, artifact `UNVERIFIED`, validasi, serta batch published. Worker online hanya jika heartbeat aktual berumur kurang dari 90 detik. Tak ada kontrol UI untuk membuka gate atau mengaktifkan pemrosesan/publikasi otomatis. Navigasi tahap memakai anchor; refresh membangun ulang status dari database.
+Stepper menunjukkan tahap saat ini/selesai berdasarkan snapshot dan batch tersimpan. Monitoring memakai API Admin yang ada dan membedakan job dihitung, artifact `UNVERIFIED`, validasi, serta batch published. Worker online hanya jika heartbeat aktual berumur kurang dari 90 detik. Tak ada kontrol UI untuk membuka production gate; prototipe `_test` hanya diaktifkan oleh env E2E. Navigasi tahap memakai anchor; refresh membangun ulang status dari database.
 
 Kecocokan format dengan ekspor penelitian Altair yang sebenarnya tetap **Pending Validation** sampai file tersebut diuji. Panduan tidak menyatakan workflow berhasil dengan data penelitian asli.
 

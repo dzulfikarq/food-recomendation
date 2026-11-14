@@ -1,12 +1,12 @@
 # Keputusan Metodologi Rekomendasi
 
-## Status: rekomendasi menunggu persetujuan
+## Status: Python UBCF utama di aplikasi; evaluasi penelitian pending
 
-**Rekomendasi untuk dibawa ke pembimbing:** gunakan explicit-rating User-Based Collaborative Filtering (UBCF) sebagai metode utama, karena FoodRec meminta rating preferensi 1–5. Ini belum menjadi keputusan penelitian yang disetujui dan bukan izin mengubah production engine. Python explicit-rating hanya kandidat implementasi. Pemilik metodologi—peneliti dan pembimbing—harus mengesahkan definisi rating, rumus, protokol evaluasi, serta ambang penerimaan.
+Python explicit-rating User-Based Collaborative Filtering (UBCF) menjadi metode rekomendasi utama FoodRec karena aplikasi meminta rating preferensi 1–5. Ini keputusan implementasi aplikasi, bukan klaim persetujuan metodologi skripsi atau validasi kualitas. Peneliti dan pembimbing tetap perlu mengesahkan definisi rating, rumus, protokol evaluasi, serta ambang penerimaan sebelum klaim penelitian atau aktivasi production.
 
 Versi ringkas yang ditujukan untuk tinjauan dosen pembimbing tersedia di [`RESEARCH_METHODOLOGY_PROPOSAL.md`](RESEARCH_METHODOLOGY_PROPOSAL.md); dokumen ini menyimpan detail keputusan dan acceptance criteria FoodRec.
 
-Jangan menyamakan model ini dengan operator Altair Item Recommendation yang diaudit. Source publik mengindikasikan operator tersebut memakai implicit/binary interaction; binary diagnostic cocok pada set skor maksimum native, tetapi source belum dikaitkan dengan extension runtime. Mathematical parity tetap **PENDING VALIDATION**. Auto-processing dan automatic publication tetap **OFF**; artifact tetap **UNVERIFIED**.
+Jangan menyamakan model ini dengan operator Altair Item Recommendation yang diaudit. Source publik mengindikasikan operator tersebut memakai implicit/binary interaction; binary diagnostic cocok pada set skor maksimum native, tetapi source belum dikaitkan dengan extension runtime. Hasil Altair `0/22` tetap catatan historis, bukan syarat prototipe Python. Kualitas rekomendasi dan persetujuan metodologi tetap **PENDING**; production auto-processing/publication tetap **OFF**. Prototipe otomatis hanya di database lokal `_test`; artifact tersimpan tetap **UNVERIFIED**.
 
 Provenance snapshot 879 mendapat audit lanjutan di [`DATASET_PROVENANCE.md`](DATASET_PROVENANCE.md); status kelayakan dataset perlu diselesaikan sebelum eksperimen skripsi.
 
@@ -109,12 +109,12 @@ Laporkan metrik ranking yang ditetapkan protokol—misalnya Precision@K, Recall@
 6. Ulangi evaluasi dengan split/validasi yang cukup atau justifikasi holdout tunggal; laporkan variasi/confidence interval dan hindari tuning pada test. Reproduksi hasil dari skrip serta manual example/unit test independen.
 7. Jika skripsi mengklaim parity Altair, sediakan workflow/build runtime yang teridentifikasi dan intermediate neighbors/scores/predicted ratings dari model yang sama. Tanpanya klaim parity dilarang.
 
-### Teknis — wajib sebelum auto-processing/publication
+### Teknis — wajib sebelum auto-processing/publication production
 
 1. Model dan konfigurasi yang disetujui punya versi tetap; hasil dapat direproduksi dari snapshot/checksum, source revision, parameter, dan output scores. Unit/integration tests memeriksa formula, missing path, candidate exclusions, tie, determinisme, dan skala rating.
-2. Jalankan validasi end-to-end pada database `_test` terisolasi. Verifikasi snapshot immutable, stale-revision rejection, idempotency, batas akses, error handling, artifact checksum, rollback/recovery, dan bahwa hasil tidak mengubah batch aktif sebelum validasi.
-3. Rating artifact melewati status verifikasi eksplisit; `SUCCEEDED` hanya berarti job selesai. Validasi jumlah baris, user/item eligibility, rank/score, coverage, missing reasons, parameter, dan report sebelum publikasi.
-4. Persetujuan metodologi/ambang ilmiah, bukti versi workflow/engine, review operasional, dan **persetujuan pengguna terpisah** diperlukan untuk membuka auto-processing dan automatic publication. Aktivasi harus lewat perubahan gate/migration yang ditinjau; bukan perubahan scope dokumen ini.
+2. Jalankan validasi end-to-end pada database `_test` terisolasi. Verifikasi snapshot immutable, stale-revision rejection, idempotency, batas akses, error handling, artifact checksum, rollback/recovery, dan bahwa publikasi hanya terjadi pada jalur prototipe yang dibatasi.
+3. Rating artifact tetap `UNVERIFIED` di storage; `SUCCEEDED` hanya berarti job selesai. Jalur prototipe mencatat re-verifikasi terpisah atas jumlah baris, user/item eligibility, prediksi, rank, parameter, revision, dan outcomes sebelum membuat batch demo.
+4. Persetujuan metodologi/ambang ilmiah, evaluasi kualitas confirmatory, review operasional, dan **persetujuan pengguna terpisah** diperlukan sebelum auto-processing/publication production. Altair parity hanya wajib bila pemilik penelitian menetapkannya sebagai pembanding; bukan gate prototipe Python.
 
 ## Persetujuan yang masih dibutuhkan
 
@@ -124,4 +124,4 @@ Laporkan metrik ranking yang ditetapkan protokol—misalnya Precision@K, Recall@
 - Setujui ambang ilmiah coverage/error/ranking dan dataset final.
 - Beri izin terpisah sebelum perubahan production engine, penggantian manual Altair workflow, membuka validation gate, auto-processing, atau automatic publication.
 
-Sampai persetujuan dan acceptance criteria terpenuhi: production engine tidak berubah, `PENDING_VALIDATION` tetap, auto-processing/publication tetap OFF, artifact tetap `UNVERIFIED`, tidak ada publikasi otomatis.
+Sampai persetujuan dan acceptance criteria terpenuhi: production engine/gates tidak berubah, `PENDING_VALIDATION` tetap, production auto-processing/publication tetap OFF, artifact tetap `UNVERIFIED`. Hanya local `_test` prototype may publish after technical re-verification; no research-quality claim follows.
